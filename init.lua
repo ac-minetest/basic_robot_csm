@@ -43,7 +43,13 @@ function getSandboxEnv ()
 			
 			listen_msg = function() 
 				local msg = basic_robot.data.listen_msg
-				if not basic_robot.data.listen_msg then basic_robot.data.listen_msg = nil end
+				basic_robot.data.listen_msg = nil
+				return msg
+			end,
+			
+			sent_msg = function() 
+				local msg = basic_robot.data.sent_msg
+				basic_robot.data.sent_msg = nil
 				return msg
 			end,
 
@@ -360,6 +366,7 @@ robogui.register(
 
 
 -- handle chats
+
 minetest.register_on_receiving_chat_message(
 --minetest.register_on_chat_message(
 function(message)
@@ -375,9 +382,27 @@ function(message)
 end
 )
 
+
+minetest.register_on_sending_chat_message(
+	function(message)
+		if string.sub(message,1,1) == "," then 
+			basic_robot.data.sent_msg = string.sub(message,2)
+			return 	true
+		end
+	end
+)
+
+
 minetest.register_chatcommand("bot", {
-	description = "display robot gui",
+	description = "display robot gui, 0/1 stop/start bot",
 	func = function(param)
+		if param == "0" then 
+			minetest.display_chat_message("#ROBOT: stopped.")
+			runnning = 0; return
+		elseif param == "1" then
+			minetest.display_chat_message("#ROBOT: started.")
+			running = 1; return
+		end
 		robot_update_form(); local form  = basic_robot.data.form;
 		minetest.show_formspec("robot", form)
 	end
