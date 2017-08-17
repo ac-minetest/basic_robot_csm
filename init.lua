@@ -2,13 +2,16 @@
 
 
 basic_robot = {};
-basic_robot.version = "08/17/2017";
+basic_robot.version = "08/17/2017a";
 basic_robot.data = {}; -- stores all robot data
 basic_robot.data.rom = {}
 
 basic_robot.commands = {};
 timestep  = 1; -- how often to run robot
 running = 1; -- is robot running?
+
+local mod_storage = minetest.get_mod_storage()
+basic_robot.data.code = mod_storage:get_string("code") or ""; -- load code
 
 --dofile(minetest.get_modpath("basic_robot").."/commands.lua")
 
@@ -39,16 +42,17 @@ function getSandboxEnv ()
 			end,
 			
 			listen_msg = function() 
+				local msg = basic_robot.data.listen_msg
 				basic_robot.data.listen_msg = nil; 
 				return msg
 			end,
 
 			read_form = function()
-				local fields = basic_robot.data.read_form;
-				local sender = basic_robot.data.form_sender;
-				basic_robot.data[name].read_form = nil; 
-				basic_robot.data[name].form_sender = nil; 
-				return sender,fields
+				local formname = basic_robot.data.formname;
+				if not formname then return end
+				local fields = basic_robot.data.fields;
+				basic_robot.data.formname = nil; 
+				return formname,fields
 			end,
 			
 			remove = function()
@@ -179,9 +183,10 @@ function getSandboxEnv ()
 		colorize = core.colorize,
 		tonumber = tonumber, pairs = pairs,
 		ipairs = ipairs, error = error, type=type,
+		minetest = minetest,
+		_G = _G,
 		
 	};
-
 	return env	
 end
 
@@ -198,9 +203,6 @@ end
 local function initSandbox() 
 	basic_robot.data.sandbox = getSandboxEnv();
 end
-
-initSandbox(); -- init sandbox at start
-
 
 local function setCode(script) -- to run script: 1. initSandbox 2. setCode 3. runSandbox
 	local err;
@@ -232,7 +234,8 @@ end
 
 local robot_update_form = function ()
 	
-	local code = basic_robot.data.code or "";
+	
+	local code = minetest.formspec_escape(basic_robot.data.code) or "";
 	local form;
 	local id = 1;
 		
@@ -241,7 +244,8 @@ local robot_update_form = function ()
 	"textarea[1.25,-0.25;8.75,9.8;code;;".. code.."]"..
 	"button_exit[-0.25,-0.25;1.25,1;OK;START]".. 
 	"button[-0.25, 0.75;1.25,1;despawn;STOP]"..
-	"button[-0.25, 1.75;1.25,1;help;help]"
+	"button[-0.25, 1.75;1.25,1;help;help]"..
+	"button[-0.25, 4.75;1.25,1;save;SAVE]"
 		
 	basic_robot.data.form = form;
 end
@@ -274,11 +278,17 @@ robogui = {}; -- a simple table of entries: [guiName] =  {getForm = ... , show =
 robogui.register = function(def)
 	robogui[def.guiName] = {getForm = def.getForm, show = def.show, response = def.response, guidata = def.guidata or {}}
 end
+
 minetest.register_on_formspec_input(
 --minetest.register_on_player_receive_fields(
 	function(formname, fields)
 		local gui = robogui[formname];
-		if gui then gui.response(formname,fields) end
+		if gui then --run gui
+			gui.response(formname,fields) 
+		else -- collect data for robot
+			basic_robot.data.formname = formname; 
+			basic_robot.data.fields = fields; 
+		end
 	end
 )
 -- robogui GUI END ====================================================
@@ -290,12 +300,14 @@ local on_receive_robot_form = function(formname, fields)
 		
 		if fields.OK then
 			
-			if fields.code then 
-				local code = fields.code or "";
-				basic_robot.data.code = code;
-				robot_update_form();
-				setCode(basic_robot.data.code);
-			end
+			local code = fields.code or "";
+			basic_robot.data.code = code;
+			robot_update_form();
+			
+			initSandbox();
+
+			local err = setCode(basic_robot.data.code);
+			if err then minetest.display_chat_message("#ROBOT CODE COMPILATION ERROR : " .. err); running = 0 return end
 
 			running = 1;
 			-- minetest.after(0, -- why this doesnt show??
@@ -303,6 +315,15 @@ local on_receive_robot_form = function(formname, fields)
 					-- minetest.show_formspec("robot", basic_robot.data.form); 
 				-- end
 			-- )
+			return
+		end
+		
+		if fields.save then
+			local code = fields.code or "";
+			basic_robot.data.code = code;
+			robot_update_form();
+			mod_storage:set_string("code", basic_robot.data.code)
+			minetest.display_chat_message("#ROBOT: code saved in mod storage.")
 			return
 		end
 		
@@ -343,18 +364,21 @@ minetest.register_on_receiving_chat_message(
 --minetest.register_on_chat_message(
 function(message)
 	local data = basic_robot.data;
-	data.listen_msg = message;
-	return false
+	
+	if string.sub(message,1,1) == "!" then 
+		data.listen_msg = string.sub(message,2);
+		return true
+	else
+		data.listen_msg = message;
+		return false
+	end
 end
 )
 
 minetest.register_chatcommand("bot", {
 	description = "display robot gui",
 	func = function(param)
-		local form  = basic_robot.data.form;
-		if not form then 
-			robot_update_form();form  = basic_robot.data.form;
-		end
+		robot_update_form(); local form  = basic_robot.data.form;
 		minetest.show_formspec("robot", form)
 	end
 })
