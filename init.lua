@@ -43,7 +43,7 @@ function getSandboxEnv ()
 			
 			listen_msg = function() 
 				local msg = basic_robot.data.listen_msg
-				basic_robot.data.listen_msg = nil; 
+				if not basic_robot.data.listen_msg then basic_robot.data.listen_msg = nil end
 				return msg
 			end,
 
