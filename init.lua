@@ -394,14 +394,18 @@ minetest.register_on_sending_chat_message(
 
 
 minetest.register_chatcommand("bot", {
-	description = "display robot gui, 0/1 stop/start bot",
+	description = "display robot gui, 0/1 pause/resume bot",
 	func = function(param)
 		if param == "0" then 
-			minetest.display_chat_message("#ROBOT: stopped.")
-			runnning = 0; return
+			minetest.display_chat_message("#ROBOT: paused.")
+			running = 0; return
 		elseif param == "1" then
+			initSandbox();
+			local err = setCode(basic_robot.data.code);
+			if err then minetest.display_chat_message("#ROBOT CODE COMPILATION ERROR : " .. err); running = 0 return end
+			running = 1;
 			minetest.display_chat_message("#ROBOT: started.")
-			running = 1; return
+			return
 		end
 		robot_update_form(); local form  = basic_robot.data.form;
 		minetest.show_formspec("robot", form)

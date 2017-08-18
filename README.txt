@@ -3,10 +3,11 @@ minetest 0.4.16dev+
 (c) 2017 rnd
 
 instructions:
-1. unpack in minetest DIR/clientmods/
-2. inside /clientmods/mods.conf there should be line: load_mod_basic_robot_csm = true
-3. while playing say .bot
-4. you can see commands in init.lua, function getSandboxEnv()  
+1. unpack in "minetest DIR"/clientmods/
+2. enable client mods in advanced settings menu or in minetest.conf
+3. inside /clientmods/mods.conf there should be line: load_mod_basic_robot_csm = true
+4. while playing say .bot
+5. you can see commands in init.lua, function getSandboxEnv()  
    or for more available commands https://github.com/minetest/minetest/blob/master/doc/client_lua_api.md
 
 
