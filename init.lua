@@ -11,7 +11,6 @@ timestep  = 1; -- how often to run robot
 running = 1; -- is robot running?
 
 local mod_storage = minetest.get_mod_storage()
-basic_robot.data.code = mod_storage:get_string("code") or ""; -- load code
 
 --dofile(minetest.get_modpath("basic_robot").."/commands.lua")
 
@@ -240,18 +239,24 @@ end
 
 local robot_update_form = function ()
 	
-	
-	local code = minetest.formspec_escape(basic_robot.data.code) or "";
+	local seltab = robogui["robot"].guidata.seltab;
+	--minetest.display_chat_message("DEBUG seltab " .. seltab)
+	local code = minetest.formspec_escape(basic_robot.data["code"..seltab]) or "";
 	local form;
 	local id = 1;
-		
+	local tablist = {};
+	for i = 1,8 do
+		tablist[i] = string.sub(minetest.formspec_escape(basic_robot.data["code"..i]) or (i .. "EMPTY "),1,8)
+	end
+	
 	form  = 
-	"size[9.5,8]" ..  -- width, height
-	"textarea[1.25,-0.25;8.75,9.8;code;;".. code.."]"..
+	"size[9.5,8.25]" ..  -- width, height
+	"tabheader[0,0;tabs;".. table.concat(tablist,",") ..";".. seltab .. ";true;true]"..
+	"textarea[1.25,-0.25;8.75,10.1;code;;".. code.."]"..
 	"button_exit[-0.25,-0.25;1.25,1;OK;START]".. 
 	"button[-0.25, 0.75;1.25,1;despawn;STOP]"..
 	"button[-0.25, 1.75;1.25,1;help;help]"..
-	"button[-0.25, 4.75;1.25,1;save;SAVE]"
+	"button[-0.25, 7.75;1.25,1;save;SAVE]"
 		
 	basic_robot.data.form = form;
 end
@@ -304,15 +309,26 @@ minetest.register_on_formspec_input(
 --process forms from spawner
 local on_receive_robot_form = function(formname, fields)
 		
+		--minetest.display_chat_message(dump(fields))
+		
+		if fields.tabs then
+			local seltab = tonumber(fields.tabs) or 1;
+			if seltab>8 then seltab = 8 end
+			robogui["robot"].guidata.seltab = seltab;
+			robot_update_form();
+			minetest.show_formspec("robot", basic_robot.data.form)
+			return
+		end
+		
 		if fields.OK then
-			
 			local code = fields.code or "";
-			basic_robot.data.code = code;
+			local seltab = robogui["robot"].guidata.seltab;
+			basic_robot.data["code"..seltab] = code;
 			robot_update_form();
 			
 			initSandbox();
 
-			local err = setCode(basic_robot.data.code);
+			local err = setCode(code);
 			if err then minetest.display_chat_message("#ROBOT CODE COMPILATION ERROR : " .. err); running = 0 return end
 
 			running = 1;
@@ -326,10 +342,13 @@ local on_receive_robot_form = function(formname, fields)
 		
 		if fields.save then
 			local code = fields.code or "";
-			basic_robot.data.code = code;
+			local seltab = robogui["robot"].guidata.seltab;
+			basic_robot.data["code"..seltab] = code;
+			
 			robot_update_form();
-			mod_storage:set_string("code", basic_robot.data.code)
-			minetest.display_chat_message("#ROBOT: code saved in mod storage.")
+			
+			mod_storage:set_string("code"..seltab, basic_robot.data["code"..seltab])
+			minetest.display_chat_message("#ROBOT: code "..seltab .. " saved in mod storage.")
 			return
 		end
 		
@@ -357,12 +376,20 @@ local on_receive_robot_form = function(formname, fields)
 		
 end
 
+--INIT GUI
 robogui.register(
 	{
 		guiName = "robot",
 		response = on_receive_robot_form,
+		guidata = {seltab = 1},
 	}
 )
+
+-- load code
+for i =1,8 do
+	basic_robot.data["code"..i] = mod_storage:get_string("code"..i) or ""
+end
+
 
 
 -- handle chats
@@ -401,7 +428,8 @@ minetest.register_chatcommand("bot", {
 			running = 0; return
 		elseif param == "1" then
 			initSandbox();
-			local err = setCode(basic_robot.data.code);
+			local seltab = robogui["robot"].guidata.seltab;
+			local err = setCode(basic_robot.data["code"..seltab]);
 			if err then minetest.display_chat_message("#ROBOT CODE COMPILATION ERROR : " .. err); running = 0 return end
 			running = 1;
 			minetest.display_chat_message("#ROBOT: started.")
