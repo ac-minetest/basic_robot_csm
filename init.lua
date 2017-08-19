@@ -421,11 +421,14 @@ minetest.register_on_sending_chat_message(
 
 
 minetest.register_chatcommand("bot", {
-	description = "display robot gui, 0/1 pause/resume bot",
+	description = "display robot gui, 0/1/2 to pause/start/resume bot",
 	func = function(param)
 		if param == "0" then 
 			minetest.display_chat_message("#ROBOT: paused.")
 			running = 0; return
+		elseif param == "2" then
+			minetest.display_chat_message("#ROBOT: resumed.")
+			running = 1; return
 		elseif param == "1" then
 			initSandbox();
 			local seltab = robogui["robot"].guidata.seltab;
