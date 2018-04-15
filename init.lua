@@ -2,7 +2,7 @@
 
 
 basic_robot = {};
-basic_robot.version = "08/17/2017a";
+basic_robot.version = "04/15/2018b";
 basic_robot.data = {}; -- stores all robot data
 basic_robot.data.rom = {}
 
@@ -46,6 +46,11 @@ function getSandboxEnv ()
 				return msg
 			end,
 			
+			msg_filter = function(filter, hide_msg) -- only records messages that match filter!, hide_msg = true -> dont display message
+				basic_robot.data.msg_filter = filter; 
+				basic_robot.data.hide_msg = hide_msg 
+			end, 
+		
 			sent_msg = function() 
 				local msg = basic_robot.data.sent_msg
 				basic_robot.data.sent_msg = nil
@@ -394,8 +399,8 @@ end
 
 -- handle chats
 
-minetest.register_on_receiving_chat_message(
---minetest.register_on_chat_message(
+--minetest.register_on_receiving_chat_message( -- 0.4.16dev
+core.register_on_receiving_chat_messages( -- 0.4.16 original!
 function(message)
 	local data = basic_robot.data;
 	
@@ -403,14 +408,16 @@ function(message)
 		data.listen_msg = string.sub(message,2);
 		return true
 	else
+		if data.msg_filter and not string.find(message,data.msg_filter) then return false end -- only listens if chat contains filter pattern!
 		data.listen_msg = message;
-		return false
+		return (data.hide_msg == true); -- if hide_msg was set to true msg wont be visible to player
 	end
 end
 )
 
 
-minetest.register_on_sending_chat_message(
+-- minetest.register_on_sending_chat_message( --0.4.16dev
+core.register_on_sending_chat_messages( -- 0.4.16 original!
 	function(message)
 		if string.sub(message,1,1) == "," then 
 			basic_robot.data.sent_msg = string.sub(message,2)

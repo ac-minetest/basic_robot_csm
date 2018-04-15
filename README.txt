@@ -7,8 +7,10 @@ instructions:
 2. enable client mods in advanced settings menu or in minetest.conf
 3. inside /clientmods/mods.conf there should be line: load_mod_basic_robot_csm = true
 4. while playing say .bot
-5. you can see commands in init.lua, function getSandboxEnv()  
-   or for more available commands https://github.com/minetest/minetest/blob/master/doc/client_lua_api.md
+5. there are 2 example programs in /scripts,
+	you can see commands in init.lua, function getSandboxEnv() or for more available commands
+	https://github.com/minetest/minetest/blob/master/doc/client_lua_api.md 
+	(you might need newer minetest client)
 
 
 ---------------------------------------------------------------------
