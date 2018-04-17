@@ -32,6 +32,7 @@ if not init then
 	end
 	
 	self.msg_filter(target.. chatchar .. msgchar, true); -- ignore all other receives
+	self.listen_msg(); -- reset msg
 	read_data(data,inputfile)
 end
 
