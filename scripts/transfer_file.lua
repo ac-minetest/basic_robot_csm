@@ -1,4 +1,4 @@
---TRANSFER FILE by rnd v04152018b
+--TRANSFER FILE by rnd v04162018a
 -- write target name. hold w and s simultaneously to start send data in robot code 8.
 -- DESCRIPTION: sends program 8 using pm chat (encoded, broken in pieces).
 -- both players can talk during transfer with no problems

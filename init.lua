@@ -427,7 +427,7 @@ core.register_on_sending_chat_messages( -- 0.4.16 original!
 )
 
 
-minetest.register_chatcommand("bot", {
+minetest.register_chatcommand("b", {
 	description = "display robot gui, 0/1/2 to pause/start/resume bot",
 	func = function(param)
 		if param == "0" then 
