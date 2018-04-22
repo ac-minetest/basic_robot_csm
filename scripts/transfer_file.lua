@@ -1,4 +1,4 @@
---TRANSFER FILE by rnd v04162018a
+--TRANSFER FILE by rnd v04222018a
 -- write target name. hold w and s simultaneously to start send data in robot code 8.
 -- DESCRIPTION: sends program 8 using pm chat (encoded, broken in pieces).
 -- both players can talk during transfer with no problems
@@ -38,12 +38,13 @@ end
 
 t[2] = os.time();
 if mode == 0 then -- IDLE
+	msg = self.listen_msg();
 	-- press w and s simultaneously to start 'send'
 	if minetest.localplayer:get_key_pressed() == 3 then 
 		say(minetest.colorize("red","SENDING DATA STREAM TO " .. target))
-		mode = 1; goto abort 
+		mode = 1; msg = false
 	end
-	msg = self.listen_msg();
+	
 	if msg then
 		msg = minetest.strip_colors(msg)
 		local i = string.find(msg, msgchar);
@@ -113,4 +114,3 @@ elseif mode == 2 then -- RECEIVER/CLIENT
 	end
 
 end
-::abort::

@@ -1,4 +1,4 @@
--- MESSENGER by rnd, v04152018a
+-- MESSENGER by rnd, v04212018a
 --[[ 
 INSTRUCTIONS:
 
@@ -12,23 +12,27 @@ INSTRUCTIONS:
 
 if not init then
 	--- S E T T I N G S ---------------------------------------
-	target = "rnd" --write name of player you want to talk to
+	target = "test" --write name of player you want to talk to
 	privatemsg = true -- false to chat, true for private msg
-	send_session_key = false; -- do we send the key (if false receive it)
+	send_session_key = true; -- do we send the key (if false receive it)
 	encryption = true; -- target player must use same settings
 
 	mode = 0; -- 1 to show window when message receiverd
 	send_timeout = 2; -- stop sending session key after so many tries
-	state = 0; -- if sendkey:  0: sending key, 1: key receipt aknowledged, ready.  if receievekey: 0: waiting for key, 1: ready
+	state = 0; -- if sendkey:  0: sending key, 1: key receipt aknowledged, ready.  if receieve key: 0: waiting for key, 1: ready
 	chatchar = "''" -- some servers end msg announce with :, some with %)
-	password = { -- passwords for target player must match
-				4000000000000000,
-				4000000000000000,
-				4000000000000000 -- this will be replaced by session key!
-				}
+	
+	password = { -- 45 bits per row, 6x45 = 260 bit, 2 consecutive passwords should be different!
+		40000000000001, -- this will change to session key!
+		40000000000002,
+		40000000000003,
+		40000000000004,
+		40000000000005,
+		40000000000006,
+	}
 	
 	-- each password can be up to 4*10^15, plus random session key 4*10^13 for total 64*10^43 ~ 148.8 bits
-	msgversion = "04152018a";
+	msgversion = "04212018a";
 	-----------------------------------------------------------
 	
 	init = true
@@ -45,80 +49,73 @@ if not init then
 	if not encryption then state = 1 end
 	scount = 0
 	
-	local scramble = function(input,password,sgn)
-		_G.math.randomseed(password);
-		local n = #input;
-		local permute = {}
-		for i = 1, n do permute[i] = i end
-		for i = n,2,-1 do
-			local j = math.random(i-1);
-			local tmp = permute[j];
-			permute[j] = permute[i]; permute[i] = tmp;
-		end
-		local out = {};
-		if sgn>0 then -- unscramble
-			for i = 1,n	do 
-				out[permute[i]] = string.sub(input,i,i) 
-			end
-		else -- scramble
-			for i = 1,n	do out[i] = string.sub(input,permute[i],permute[i]) end
-		end
-		return table.concat(out,"")
-	end
-	
-	local encrypt_ = function(input,password,sgn)
-		local n = 127-32+1;
+	encrypt_ = function(input,password,sgn)
+		local n = 128-32+1; -- Z_97, 97 prime
 		local m = 32;
 		local ret = {};input = input or "";
 		_G.math.randomseed(password);
+		local key = {};
+		local out = {};
+		for i=1, string.len(input) do 
+			key[i] = math.random(n) -- generate keys from password
+			out[i] = string.byte(input,i)-m
+		end
+		
 		if sgn > 0 then -- encrypt
-			local c0 = 0
+			
 			for i=1, string.len(input) do
-				local offset=math.random(n);
-				local c = string.byte(input,i)-m;
-				c = m+((c+(c0+offset)*sgn) % n);
-				c0 = c-m; c0 = c0^3;
-				ret[#ret+1] = string.char(c)
+				local offset=key[i]
+				local c = out[i];
+				
+				local c0 = 0;
+				for j = 1,i-1 do c0 = c0 + (out[j])^3; c0 = c0 % n end
+				for j = i+1,string.len(input) do c0 = c0 + (out[j])^3; c0 = c0 % n end
+				
+				c = (c+(c0+offset)*sgn) % n;
+				out[i] = c
 			end
 		else -- decrypt
 			local c0 = 0
-			local offsets = {};
-			for i=1, string.len(input) do offsets[i] = math.random(n) end
 			for i = string.len(input),1,-1 do
-				local offset=offsets[i];
+				local offset=key[i];
+				local c = out[i];
+
 				local c0 = 0;
-				if i>1 then c0 = string.byte(input,i-1)-m end
-				c0 = c0^3;
-				local c = string.byte(input,i)-m;
-				c = m+((c+(c0+offset)*sgn) % n);
-				ret[i] = string.char(c)
+				for j = 1,i-1 do c0 = c0 + (out[j])^3; c0 = c0 % n end
+				for j = i+1,string.len(input) do c0 = c0 + (out[j])^3; c0 = c0 % n end
+				
+				c = (c+(c0+offset)*sgn) % n;
+				out[i] = c
 			end
+		end
+		
+		
+		for i = 1, string.len(input) do
+			ret[#ret+1] = string.char(m+out[i])
 		end
 		
 		return table.concat(ret,"")
 	end
+		
 	
-	unit_test_encrypt_ = function()
-		local text = "ABCDE"
-		--local password = {1,2,session_key}
-		local enc = encrypt_(text,password[1],1)
-		local dec = encrypt_(enc,password[1],-1)
-		say(text .. " -> " .. enc .. " -> " .. dec)
-		self.remove()
-	end
-	--unit_test_encrypt_()
-	
-	encrypt = function(input, password) -- encrypt->scramble->encrypt
-		local ret = encrypt_(input,password[1],1);
-		ret = scramble(ret, password[2], 1);
-		return encrypt_(ret,password[3],1);
+	encrypt = function(text,password)
+		local input = text;
+		local out = "";
+		for i = 1, #password do
+			input = encrypt_(input,password[i], (i%1)*2-1)
+		end
+		return input
 	end
 	
-	decrypt = function(input, password) 
-		local ret = encrypt_(input,password[3],-1) 
-		ret = scramble(ret, password[2], -1);
-		return encrypt_(ret,password[1],-1)  
+	decrypt = function(text, password)
+		local input = text;
+		local out = "";
+		for i = #password,1,-1 do
+			input = encrypt_(input,password[i], -(i%1)*2+1)
+		end
+		return input
 	end
+	
 	
 	unit_test = function()
 		local text = "Hello encrypted world! 12345 ..."
@@ -161,7 +158,7 @@ if msg then
 					if msg == "OK " .. session_key then  -- ready to chat
 						state = 1 
 						say("#MESSENGER: TARGET CONFIRMS RECEIPT OF SESSION KEY " .. session_key)
-						password[3] = session_key;password[2] = password[2] - session_key;
+						password[1] = session_key;password[2] = password[2] - session_key;
 						--say(password1 .. " " .. password2)
 					end
 				end
@@ -184,7 +181,7 @@ if msg then
 					msg = encrypt("OK " .. session_key, password)
 					say("/msg " .. target .. " " .. chatchar .. msg,true) -- send confirmation of receipt
 					state = 1 say("#MESSENGER: RECEIVED SESSION KEY " .. session_key)
-					password[3] = session_key;password[2] = password[2] - session_key;
+					password[1] = session_key;password[2] = password[2] - session_key;
 					--say(password1 .. " " .. password2)					
 				end 
 			end
