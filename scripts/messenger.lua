@@ -29,7 +29,7 @@ if not init then
 	}
 	
 	-- each password can be up to 4*10^15, plus random session key 4*10^13 for total 64*10^43 ~ 148.8 bits
-	msgversion = "04212018a";
+	msgversion = "04232018a";
 	-----------------------------------------------------------
 	
 	init = true
@@ -156,7 +156,12 @@ if state == -1 then -- idle
 	end
 else -- receive/send
 	msg = self.listen_msg()
-	if scount == 0 then msg = "" end -- trigger sending key at start
+	
+	if state == 0 then 
+		if minetest.localplayer:get_key_pressed() == 3 then scount = 0 end
+		if scount == 0 then msg = "" end -- trigger sending key at start
+	end
+	
 	if msg then
 		if state == 0 then
 			-- SENDING KEY, listening for confirmation
