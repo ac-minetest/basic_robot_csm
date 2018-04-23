@@ -1,4 +1,4 @@
--- MSGENGER by rnd, v04232018a
+--MSGER by rnd, v04232018a
 --[[ 
 INSTRUCTIONS:
 
@@ -10,7 +10,7 @@ INSTRUCTIONS:
 
 if not init then
 	--- S E T T I N G S ---------------------------------------
-	target = "test" --write name of player you want to talk to
+	target = "qtest" --write name of player you want to talk to
 	privatemsg = true -- false to chat, true for private msg
 	encryption = true; -- target player must use same settings
 
@@ -59,6 +59,7 @@ if not init then
 		for i=1, string.len(input) do 
 			key[i] = math.random(n) -- generate keys from password
 			out[i] = string.byte(input,i)-m
+			if out[i] == -6 then out[i] = 96 end -- conversion back
 		end
 		
 		if sgn > 0 then -- encrypt
@@ -91,6 +92,7 @@ if not init then
 		
 		
 		for i = 1, string.len(input) do
+			if out[i] == 96 then out[i]=-6 end -- 32 + 96 = 128 (bad char)
 			ret[#ret+1] = string.char(m+out[i])
 		end
 		
