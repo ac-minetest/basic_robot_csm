@@ -1,4 +1,4 @@
---MSGER by rnd, v04232018a
+--MSGER by rnd, v04242018a
 --[[ 
 INSTRUCTIONS:
 
@@ -10,7 +10,7 @@ INSTRUCTIONS:
 
 if not init then
 	--- S E T T I N G S ---------------------------------------
-	target = "qtest" --write name of player you want to talk to
+	target = "test" --write name of player you want to talk to
 	privatemsg = true -- false to chat, true for private msg
 	encryption = true; -- target player must use same settings
 
@@ -19,17 +19,21 @@ if not init then
 	state = 0; -- if sendkey:  0: sending key, 1: key receipt aknowledged, ready.  if receieve key: 0: waiting for key, 1: ready
 	chatchar = "''" -- some servers end msg announce with :, some with %)
 	
-	password = { -- 45 bits per row, 6x45 = 260 bit, 2 consecutive passwords should be different!
-		40000000000001, -- this will change to session key!
-		40000000000002,
-		40000000000003,
-		40000000000004,
-		40000000000005,
-		40000000000006,
+	password = { -- ~30 bits per row, 10x ~ 300 bit, 2 consecutive passwords should be different!
+		1000000000, -- this will change to session key!
+		1000000001,
+		1000000002,
+		1000000003,
+		1000000004,
+		1000000005,
+		1000000006,
+		1000000007,
+		1000000008,
+		1000000009,
 	}
 	
-	-- each password can be up to 4*10^15, plus random session key 4*10^13 for total 64*10^43 ~ 148.8 bits
-	msgversion = "04232018a";
+	-- each password can be up to 10^10, plus random session key 4*10^13 for total 64*10^43 ~ 148.8 bits
+	msgversion = "04242018a";
 	-----------------------------------------------------------
 	
 	init = true
@@ -41,23 +45,34 @@ if not init then
 	self.msg_filter(chatchar) -- only records messages that contain chatchar to prevent skipping if too many messages from server!
 	
 	
-	maxn = 40000000000000;
-	_G.math.randomseed(os.time()); session_key = math.random(maxn) -- derive session key
+	maxn = 1000000000;
+	
+	rndm = 2^31 - 1; --C++11's minstd_rand
+	rnda = 48271;
+	random = function(n)
+		rndseed = (rnda*rndseed)% rndm;
+		return rndseed % n
+	end
+	
+	rndseed = os.time(); session_key = random(maxn) -- derive session key
 	send_session_key = false
 	state = -1
 	
 	if not encryption then state = 1 end
 	scount = 0
 	
+	
+	
+	
 	encrypt_ = function(input,password,sgn)
 		local n = 128-32+1; -- Z_97, 97 prime
 		local m = 32;
 		local ret = {};input = input or "";
-		_G.math.randomseed(password);
+		rndseed = password;
 		local key = {};
 		local out = {};
 		for i=1, string.len(input) do 
-			key[i] = math.random(n) -- generate keys from password
+			key[i] = random(n) -- generate keys from password
 			out[i] = string.byte(input,i)-m
 			if out[i] == -6 then out[i] = 96 end -- conversion back
 		end
@@ -141,12 +156,13 @@ if state == -1 then -- idle
 				msg = string.sub(msg,i+string.len(chatchar))
 				session_key =  tonumber(decrypt(msg,password))
 				if not session_key then say("#MESSENGER: restart .bot, wrong key") end
+				
 				msg = encrypt("OK " .. session_key, password)
 				say("/msg " .. target .. " " .. chatchar .. msg,true) -- send confirmation of receipt
 				msg = false
 				state = 1 scount = 1
 				say(minetest.colorize("lawngreen","#MESSENGER: RECEIVED SESSION KEY " .. session_key))
-				password[1] = session_key;password[2] = password[2] - session_key;
+				password[1] = session_key;password[#password] = password[#password] - session_key;
 				--say(password1 .. " " .. password2)					
 			end 
 		end
@@ -176,7 +192,7 @@ else -- receive/send
 					if msg == "OK " .. session_key then  -- ready to chat
 						state = 1
 						say(minetest.colorize("lawngreen","#MESSENGER: TARGET CONFIRMS RECEIPT OF SESSION KEY " .. session_key))
-						password[1] = session_key;password[2] = password[2] - session_key;
+						password[1] = session_key;password[#password] = password[#password] - session_key;
 						--say(password1 .. " " .. password2)
 					end
 				end
