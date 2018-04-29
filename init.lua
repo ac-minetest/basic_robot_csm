@@ -6,10 +6,12 @@ basic_robot.version = "04/15/2018b";
 basic_robot.data = {}; -- stores all robot data
 basic_robot.data.rom = {}
 
+
 basic_robot.commands = {};
 timestep  = 1; -- how often to run robot
 running = 1; -- is robot running?
 
+local cbuffer = {}; --chat buffer
 local mod_storage = minetest.get_mod_storage()
 
 --dofile(minetest.get_modpath("basic_robot").."/commands.lua")
@@ -41,9 +43,7 @@ function getSandboxEnv ()
 			end,
 			
 			listen_msg = function() 
-				local msg = basic_robot.data.listen_msg
-				basic_robot.data.listen_msg = nil
-				return msg
+				return cbuffer.read()
 			end,
 			
 			msg_filter = function(filter, hide_msg) -- only records messages that match filter!, hide_msg = true -> dont display message
@@ -398,20 +398,39 @@ end
 
 
 -- handle chats
+	
+	cbuffer.size = 10 -- store up to 10 chats
+	cbuffer.idx = 0
+	cbuffer.data = {};
+	cbuffer.t = 0 -- how many unread insertions
+
+	cbuffer.add = function(element) -- insert new element
+		local i = cbuffer.idx+1;
+		if i > cbuffer.size then i = 1 end
+		cbuffer.data[i]=element
+		cbuffer.idx = i
+		local t = cbuffer.t +1
+		if t>cbuffer.size then t = cbuffer.size end
+		cbuffer.t =  t
+	end
+
+	cbuffer.read = function() -- pop 1 message, return nil if none
+		local t = cbuffer.t; 
+		if t>0 then
+			cbuffer.t = t-1
+			local idx = cbuffer.idx;
+			if idx>1 then cbuffer.idx = idx - 1 else cbuffer.idx = cbuffer.size end
+			return cbuffer.data[idx];
+		end
+	end
 
 --minetest.register_on_receiving_chat_message( -- 0.4.16dev
 core.register_on_receiving_chat_messages( -- 0.4.16 original!
 function(message)
 	local data = basic_robot.data;
-	
-	if string.sub(message,1,1) == "!" then 
-		data.listen_msg = string.sub(message,2);
-		return true
-	else
-		if data.msg_filter and not string.find(message,data.msg_filter) then return false end -- only listens if chat contains filter pattern!
-		data.listen_msg = message;
-		return (data.hide_msg == true); -- if hide_msg was set to true msg wont be visible to player
-	end
+	if data.msg_filter and not string.find(message,data.msg_filter) then return false end -- only listens if chat contains filter pattern!
+	cbuffer.add(message);
+	return (data.hide_msg == true); -- if hide_msg was set to true msg wont be visible to player
 end
 )
 

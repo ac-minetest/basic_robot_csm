@@ -47,7 +47,7 @@ if not init then
 	
 	maxn = 1000000000;
 	
-	rndm = 2^31 - 1; --C++11's minstd_rand
+	rndm = 2^31 − 1; --C++11's minstd_rand
 	rnda = 48271;
 	random = function(n)
 		rndseed = (rnda*rndseed)% rndm;
