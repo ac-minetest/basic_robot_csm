@@ -1,4 +1,3 @@
--- colored chat messages
 if not init then
   self.msg_filter("",true) -- record & hide all incoming messages
   cfilter = {
@@ -11,7 +10,7 @@ if not init then
 end
 
 msg = self.listen_msg()
-if msg then
+if msg and msg~= "" then
 	color = defaultcolor;
 	for k,v in pairs(cfilter) do
 		local l = string.len(k);
