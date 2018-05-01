@@ -1,4 +1,4 @@
---TRANSFER FILE by rnd v04222018a
+--TRANSFER FILE by rnd v05012018a
 -- write target name. hold w and s simultaneously to start send data in robot code 8.
 -- DESCRIPTION: sends program 8 using pm chat (encoded, broken in pieces).
 -- both players can talk during transfer with no problems
@@ -32,7 +32,8 @@ if not init then
 	end
 	
 	self.msg_filter(target.. chatchar .. msgchar, true); -- ignore all other receives
-	self.listen_msg(); -- reset msg
+	local msg = ""
+	while msg do msg = self.listen_msg() end -- reset msg buffer
 	read_data(data,inputfile)
 end
 
