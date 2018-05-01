@@ -1,4 +1,4 @@
---MSGER by rnd, v04242018a
+--MSGER by rnd
 --[[ 
 INSTRUCTIONS:
 
@@ -9,6 +9,7 @@ INSTRUCTIONS:
 --]]
 
 if not init then
+	msgversion = "05012018a"
 	--- S E T T I N G S ---------------------------------------
 	target = "test" --write name of player you want to talk to
 	privatemsg = true -- false to chat, true for private msg
@@ -20,35 +21,42 @@ if not init then
 	chatchar = "''" -- some servers end msg announce with :, some with %)
 	
 	password = { -- ~30 bits per row, 10x ~ 300 bit, 2 consecutive passwords should be different!
-		1000000000, -- this will change to session key!
-		1000000001,
-		1000000002,
-		1000000003,
+		1050060370, 
+		1301007001,
+		1000050002,
+		1040000003,
 		1000000004,
-		1000000005,
-		1000000006,
-		1000000007,
-		1000000008,
-		1000000009,
+		1000600005,
+		1080000006,
+		1000001203,
+		1000100008,
+		1080500609,
 	}
 	
+	password0 = {}; for i=1,#password do password0[i] =  password[i] end
+	
+	
 	-- each password can be up to 10^10, plus random session key 4*10^13 for total 64*10^43 ~ 148.8 bits
-	msgversion = "04242018a";
 	-----------------------------------------------------------
 	
 	init = true
-	say(minetest.colorize("red","#MESSENGER ".. msgversion .. " STARTED. "))
+	say(minetest.colorize("lawngreen","#MESSENGER ".. msgversion .. " STARTED. Starting conversation with " .. target))
 	
-	if encryption then say(minetest.colorize("red","wait for receipt of session key or hold W+S to send session key!")) end
+	if encryption then say(minetest.colorize("orange","wait for receipt of session key or hold W+S to send session key!")) end
 	
 	
 	self.msg_filter(chatchar) -- only records messages that contain chatchar to prevent skipping if too many messages from server!
+	
+	empty_chat_buffer = function()
+		local msg = "";	while msg do msg = self.listen_msg() end
+	end
+	empty_chat_buffer();
 	
 	
 	maxn = 1000000000;
 	
 	rndm = 2^31 − 1; --C++11's minstd_rand
-	rnda = 48271;
+	rnda = 48271; -- generator
 	random = function(n)
 		rndseed = (rnda*rndseed)% rndm;
 		return rndseed % n
@@ -60,9 +68,7 @@ if not init then
 	
 	if not encryption then state = 1 end
 	scount = 0
-	
-	
-	
+	wtime = 0	
 	
 	encrypt_ = function(input,password,sgn)
 		local n = 128-32+1; -- Z_97, 97 prime
@@ -154,53 +160,60 @@ if state == -1 then -- idle
 			local i = string.find(msg, chatchar)
 			if i then -- ready to chat
 				msg = string.sub(msg,i+string.len(chatchar))
-				session_key =  tonumber(decrypt(msg,password))
-				if not session_key then say("#MESSENGER: restart .bot, wrong key") end
-				
-				msg = encrypt("OK " .. session_key, password)
-				say("/msg " .. target .. " " .. chatchar .. msg,true) -- send confirmation of receipt
-				msg = false
-				state = 1 scount = 1
-				say(minetest.colorize("lawngreen","#MESSENGER: RECEIVED SESSION KEY " .. session_key))
-				password[1] = session_key;password[#password] = password[#password] - session_key;
-				--say(password1 .. " " .. password2)					
+				session_key =  tonumber(decrypt(msg,password0))
+				if not session_key then 
+					say(minetest.colorize("red","#MESSENGER: target uses wrong password! restarting...")) init = false 
+				else
+					msg = encrypt("OK " .. session_key, password0)
+					say("/msg " .. target .. " " .. chatchar .. msg,true) -- send confirmation of receipt
+					msg = false
+					state = 1 scount = 1
+					say(minetest.colorize("lawngreen","#MESSENGER: RECEIVED SESSION KEY " .. session_key))
+					password[1] = session_key;password[#password] = password0[#password0] - session_key;
+					--say(password1 .. " " .. password2)					
+				end
 			end 
 		end
 	end
 	
 	if not msg and minetest.localplayer:get_key_pressed() == 3 then 
 		say(minetest.colorize("red","SENDING SESSION KEY TO " .. target))
-		send_session_key = true; state = 0;
+		state = 0;
 	end
 else -- receive/send
 	msg = self.listen_msg()
 	
 	if state == 0 then 
-		if minetest.localplayer:get_key_pressed() == 3 then scount = 0 end
+		if minetest.localplayer:get_key_pressed() == 3 then scount = 0 wtime = 0 end
 		if scount == 0 then msg = "" end -- trigger sending key at start
+	
+		wtime = wtime + 1
+		if wtime > 10 then say(minetest.colorize("red","#MESSENGER: timeout while waiting for response from target. resetting")); init = false end
 	end
 	
 	if msg then
 		if state == 0 then
+			
 			-- SENDING KEY, listening for confirmation
 			if string.find(msg,target) and string.find(msg,chatchar) then -- did we receive confirmation?
 				msg = minetest.strip_colors(msg)
 				local i = string.find(msg, chatchar)
 				if i then 
 					msg = string.sub(msg,i+string.len(chatchar))
-					msg = decrypt(msg,password) 
+					msg = decrypt(msg,password0) 
 					if msg == "OK " .. session_key then  -- ready to chat
 						state = 1
 						say(minetest.colorize("lawngreen","#MESSENGER: TARGET CONFIRMS RECEIPT OF SESSION KEY " .. session_key))
-						password[1] = session_key;password[#password] = password[#password] - session_key;
+						password[1] = session_key;password[#password] = password0[#password0] - session_key;
 						--say(password1 .. " " .. password2)
 					end
 				end
 			elseif scount == 0 then -- send session key
 				scount = 1
-				msg = encrypt(session_key, password)
+				msg = encrypt(session_key, password0)
 				say("/msg " .. target .. " " .. chatchar .. msg,true)
-				say("#MESSENGER: waiting for " .. target .. " to respond ...")
+				say(minetest.colorize("red","#MESSENGER: waiting for " .. target .. " to respond ..."))
+				wtime = 0
 			end
 		elseif state == 1 then -- NORMAL OPERATION: DECRYPT INCOMMING MESSAGES, SEND ENCRYPTED MESSAGES
 			if string.find(msg,target) and string.find(msg,chatchar) then
@@ -210,7 +223,14 @@ else -- receive/send
 				if i then 
 					msg = string.sub(msg,i+string.len(chatchar))
 					--say("ENCRYPTED :" .. msg)
-					if encryption then msg = decrypt(msg,password); msg = minetest.colorize("LawnGreen","DECRYPTED from " .. target .. "> ") .. minetest.colorize("yellow", msg) end
+					if encryption then 
+						msg = decrypt(msg,password);
+						if string.byte(msg,1)~=32 then 
+							say(minetest.colorize("red","#MESSENGER: DECRYPTION ERROR. TARGET USING DIFFERENT PASSWORD. RESTARTING MESSENGER."))
+							init = false
+						end
+						msg = minetest.colorize("LawnGreen","DECRYPTED from " .. target .. ">") .. minetest.colorize("yellow", msg) 
+					end
 					form = "size[5,5] textarea[0,0;6,6;MSG;MESSAGE FROM " .. target .. "> " .. minetest.formspec_escape(msg) .. "]"
 					if mode == 1 then minetest.show_formspec("robot", form) else say(msg) end
 				end
@@ -223,7 +243,7 @@ end
 msg = self.sent_msg() -- is there message to send?
 if msg then
 	say(minetest.colorize("Pink", "MESSAGE SENT to " .. target .. "> " .. msg))
-	if encryption then msg = encrypt(msg, password) end
+	if encryption then msg = encrypt(" " .. msg, password) end
 	if privatemsg then
 		say("/msg " .. target .. " " .. chatchar .. msg,true)
 	else
