@@ -1,4 +1,4 @@
--- colored text: string.char(27) .."(c@red)"..text
+-- colored chat
 if not colors then
 	colors = {"red","blue","violet", "lawngreen","brown","yellow","orange","pink"}
 end

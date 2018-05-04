@@ -40,6 +40,7 @@ end
 
 msg = self.listen_msg()
 if msg and msg~= "" then
+	msg = minetest.strip_colors(msg)
 	i = string.find(msg,">")
 	if i then
 		msg = decode(string.sub(msg,i+2))

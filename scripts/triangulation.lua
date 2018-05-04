@@ -1,7 +1,8 @@
 --triangulation by rnd
 if not init then
 	get_inter = function(x1,y1,a1,b1,x2,y2,a2,b2) 
-		local s = (b1*x1-a1*y1-b1*x2+a1*y2)/(a2*b1-b2*a1); return x2+a2*s,y2+b2*s
+		local an = a2*b1-b2*a1;
+		local s = (b1*x1-a1*y1-b1*x2+a1*y2)/an; return x2+a2*s,y2+b2*s,math.abs(an)
 	end
 	init = true; state = 1; pos = {{{0,0,0},{0,0,0}},{{0,0,0},{0,0,0}}};
 	say(minetest.colorize("red", "LOOK AT TARGET FROM 2 DIFFERENT POSITIONS. press shift to advance to next step."))
@@ -13,9 +14,15 @@ if minetest.localplayer:get_key_pressed() == 64 then
 		local p = minetest.localplayer:get_pos(); local view = minetest.camera:get_look_dir()
 		pos[state] = {p,view}; state = state +1
 		if state == 3 then
-			local x1,z1,x2,y2;init = false
-			x1,z1 = get_inter(pos[1][1].x,pos[1][1].z,pos[1][2].x,pos[1][2].z,pos[2][1].x,pos[2][1].z,pos[2][2].x,pos[2][2].z)
-			x2,y2 = get_inter(pos[1][1].x,pos[1][1].y,pos[1][2].x,pos[1][2].y,pos[2][1].x,pos[2][1].y,pos[2][2].x,pos[2][2].y)
+			local x1,z1,x2,y2,y3,z3,an1,an2,an3;init = false
+			x1,z1,an1 = get_inter(pos[1][1].x,pos[1][1].z,pos[1][2].x,pos[1][2].z,pos[2][1].x,pos[2][1].z,pos[2][2].x,pos[2][2].z)
+			x2,y2,an2 = get_inter(pos[1][1].x,pos[1][1].y,pos[1][2].x,pos[1][2].y,pos[2][1].x,pos[2][1].y,pos[2][2].x,pos[2][2].y)
+			y3,z3,an3 = get_inter(pos[1][1].y,pos[1][1].z,pos[1][2].y,pos[1][2].z,pos[2][1].y,pos[2][1].z,pos[2][2].y,pos[2][2].z)
+			
+			if an2>an1 then x1 = x2 end
+			if an3>an2 then y2 = y3 end
+			if an3>an1 then z1 = z3 end
+			
 			local dist = math.floor(math.sqrt((p.x-x1)^2+(p.y-y2)^2+(p.z-z1)^2))
 			x1 = math.floor(10*x1)/10;y2 = math.floor(10*y2)/10;z1 = math.floor(10*z1)/10
 			say(minetest.colorize("lawngreen","TARGET IS AT " .. x1.. " " .. y2 .. " "  .. z1 .. " (dist = " .. dist ..")"))
