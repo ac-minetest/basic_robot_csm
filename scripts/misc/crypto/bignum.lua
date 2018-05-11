@@ -1,5 +1,5 @@
--- BIGNUM by rnd v05112018
--- functions: new, tostring, rnd, importdec, _add, _sub, mul, div2, div, is_larger, is_equal, add, sub
+-- BIGNUM by rnd v05112018b
+-- functions: new, tostring, rnd, importdec, _add, _sub, mul, div2, div, is_larger, is_equal, add, sub, bignum.mod
 
 if not bignum then
 	--self.spam(1);
@@ -271,6 +271,7 @@ if not bignum then
 	end
 	--mul_test()
 	
+	-- m = 300, base 2^26, 100 repeats: amd ryzen 1200: 0.1s, amd-e350 apu 1.6ghz (2010) : 5.15s
 	mul_bench = function()
 		local m = 300;
 		local base = 2^26
@@ -347,17 +348,25 @@ if not bignum then
 	--div2_test()
 	
 	--[[
-		very simple division that works reasonably well 
+		very simple division that works reasonably well (we only need 1 division for barrett reduction anyway, could use precomputed too)
 		
 		strategy: bisection for f(x) = x*D + comparison with N, takes around Log_2(initial range) steps (sums+mults), 
 			so ~O(D^2*log base^(n2-n1))
 			low, mid, high. pick reasonably good initial range guess, like near order of magnitude close.
 			mid =  (low+high)/2
 			compute: compare N and mid*D, if N bigger then low = mid else high = mid..
-			??maybe: adjust N too, if N bigger then N = N-mid*D; low = 0; high = high - mid, add mid to separate q..
 		BENCHMARKS: (amd ryzen 1200)
 			HUGE N=10k bit number/ D=5k bit number : 1.5 s
+			N = 8k bit number / D = 4k bit number : 0.7s
 			N = 1040 bit, D = 520 bit: 0.0042 s ( typical application srp,diffie-hellman in Z_~2^512 group)
+			if D is 3900 bits it takes around 3900 steps of iteration
+				amd-e350 apu 1.6ghz (2010)
+			N = 8k bit, D = 4k bit, divide takes 44s ( 60x slower than ryzen)
+		TODO: 
+			possible speed improve ?: after there are some digits correct
+			reduce N by N = N-q0*D which will effectively decrease N and multiplies of mid ( smaller numbers ). then keep adding 
+			obtained q's together to get final quotient.
+			
 		--]]
 	
 	bignum.div = function(N,D, res) -- res = [N/D]
@@ -384,12 +393,12 @@ if not bignum then
 		local temp = bignum.new(base,1,{});
 		local step = 0;
 		
-		while step < 100000 do -- low self confidence :)
+		while step < 100000 do -- in practice this uses around log_2 (base^(n2-n1)) iterations, for example dividing 8192 bit number by 4096 takes ~4000 iterations..
 			step = step + 1
 			bignum._add(low,high,mid); bignum.div2(mid,mid); -- mid = (low+high)/2
 			
 			if bignum.is_equal(low,mid) then 
-				--say("DONE. step  " .. step) -- .. " low = " .. bignum.tostring(low) .. " high = " .. bignum.tostring(high) .. " mid = " .. bignum.tostring(mid))
+				if DEBUG then say("DONE. step  " .. step) end-- .. " low = " .. bignum.tostring(low) .. " high = " .. bignum.tostring(high) .. " mid = " .. bignum.tostring(mid))
 				res.digits = mid.digits
 				return
 			end
@@ -423,8 +432,9 @@ if not bignum then
 		local n1 = bignum.rnd(base, 1, m)
 		local n2 = bignum.rnd(base, 1, m/2)
 		local res = {sgn=1, digits = {}};
+		DEBUG = true -- to display how many steps were needed
 		local t = os.clock();bignum.div(n1,n2,res); local elapsed = os.clock() - t;
-		
+		DEBUG = false
 		local temp = {sgn=1, digits = {}};
 		bignum.mul(n2,res,temp);bignum._sub(n1,temp, res); -- res = n1-n2*res
 		if bignum.is_larger(n2, res) then 
@@ -437,9 +447,9 @@ if not bignum then
 	--divbignum_test()
 	
 	div_bench = function()
-		local m = 40;
+		local m = 300;
 		local base = 2^26
-		local r = 100
+		local r = 1
 		
 		local n1 = bignum.rnd(base, 1, m)
 		local n2 = bignum.rnd(base, 1, m/2)
@@ -458,5 +468,69 @@ if not bignum then
 	-----------------------------------------------
 
 	-- a,b in Z_n -> a*b mod n = ?
+	-- how to compute a % n efficiently? We can use barrett reduction trick.
+	-- normally: a%n = a - [a/n]*n. Instead of division we compute [a/n] with multiply and shift ( base = b)
+	-- [a/n] = [a*(B^k/n)/B^k] = [a*m/B^k]. Here integer m is [B^k/n] for some k, where B^k>=n. since
+	-- a*(m/B^k-1/n) < 1 we get a*(m-B^k/n) < B^k or m-B^k/n < B^k/a. since left side is always <1 this will be true if 
+	-- 1 < B^k/a or a < B^k. note since a*m/B^k - a/n < 1 after applying [ ] we can still get difference = 1 (but not more),
+	-- so need to check if  a - [a*m/B^k]*n is smaller than n. If not additional -n is needed.
+	-- so REQUIREMENTS: n<=B^k, a< B^k.
+	-- if we need a<n^2 (like in modulo multiply in Z_n) then this means: (n-1)^2 < B^k. So if n<B^N then k should be 2N.
 	
+	-- barret = {n = bignum,  m =  from barrett.., k= .., }
+	bignum.get_barrett = function(n) -- returns barrett data. useful to compute a mod n, where a <= (n-1)^2
+		local base = n.base;
+		local k = 2*#n.digits+2; -- n<B^(n1+1) -> k = 2*(n1+1)
+		local Bk = bignum.new(base,1,{})
+		local res = bignum.new(base,1,{})
+		local data = Bk.digits;
+		for i =1,k do data[i]= 0 end; data[k+1]=1; -- this is B^k
+		bignum.div(Bk, n,res);
+		return {n=n, m=res, k=k};
+	end
+	
+	get_barrett_test = function()
+		local d=4
+		local ndec2 = math.random(10^d) 
+		local n2 = bignum.importdec(ndec2)
+		local barrett = bignum.get_barrett(n2)
+		local barrettm = math.floor(10^(2*d+2)/ndec2)
+		say(bignum.tostring(barrett.m) .. "(CHECK: " .. barrettm .. ")")
+	end
+	--get_barrett_test()
+	
+	
+	bignum.mod = function(a,barrett,res) -- a should be less or equal (n-1)^2, stores a%n into res
+		
+		local k = barrett.k;
+		local n = barrett.n;
+		local m = barrett.m;
+		local base = a.base;
+		
+		bignum.mul(a,m,res); -- large multiply 1: res = a*m
+
+		local data = res.digits;local n1 = #data;  --res = res / B^k
+		for i = 1, n1-k do data[i]=data[i+k] end; for i = n1-k+1,n1 do data[i] = nil end -- bitshift
+		
+		local temp = bignum.new(base,1,{});
+		bignum.mul(res,n, temp); -- multiply 2: res*n
+		bignum._sub(a,temp,res); -- subtract: res = a - res*n
+		if bignum.is_larger(res,n) then bignum._sub(res,n,res) end
+	end
+	
+	mod_test = function()
+		local m = 3;
+		local base = 10;
+		local n1 = bignum.rnd(base, 1, 2*m)
+		local n2 = bignum.rnd(base, 1, m)
+		local barrett = bignum.get_barrett(n2)
+		local res = bignum.new(base,1,{});
+		bignum.mod(n1, barrett, res);
+		local is_larger = bignum.is_larger(n2,res);
+		
+		say("barrett mod_test: n1 " .. bignum.tostring(n1) .. " n2 " .. bignum.tostring(n2) .. " res = n1 % n2 = " .. bignum.tostring(res) .. " CHECK: res<n2 " .. (is_larger and "OK" or "FAIL") )
+		
+	end
+	--mod_test()
+
 end
