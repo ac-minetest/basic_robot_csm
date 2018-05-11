@@ -1,8 +1,8 @@
--- BIGNUM by rnd
--- contents: new, tostring, rnd, importdec, _add, _sub, is_larger, add, sub, mul
+-- BIGNUM by rnd v05112018
+-- functions: new, tostring, rnd, importdec, _add, _sub, mul, div2, div, is_larger, is_equal, add, sub
 
 if not bignum then
-	self.spam(1);
+	--self.spam(1);
 
 	bignum = {};
 	bignum.new = function(base,sgn, digits)
@@ -12,7 +12,7 @@ if not bignum then
 		ret.sgn = sgn -- sign of number,+1 or -1
 		local data = ret.digits;
 		local m = #digits;
-		ret.digits = digits; -- digits by reference!
+		ret.digits = digits; -- THIS SEEMS TO MAKE A NEW COPY! if you work on this original wont change
 		--for i=1,m do data[i] = digits[m-i+1] end -- copy
 		return ret
 	end
@@ -54,11 +54,16 @@ if not bignum then
 	end
 	--importdec_test()
 	
-	bignum.exportdec = function(n) -- warning: can cause overflow
+	bignum.exportdec = function(n) -- warning: can cause overflow if number larger than 2^52 ~ 4.5*10^15
 		local ndec = 0;
 		for i = #n.digits,1,-1 do ndec = 10*ndec + n.digits[i] end
 		return ndec*n.sgn
 	end
+	
+	-----------------------------------------------
+	--	ADDITION
+	-----------------------------------------------
+	
 	
 	bignum._add = function(n1,n2,res) -- assume both >0, same base: n1+n2 -> res
 		local b = n1.base;
@@ -88,6 +93,10 @@ if not bignum then
 	end
 	--_add_test()
 	
+	-----------------------------------------------
+	--	SUBTRACTION
+	-----------------------------------------------
+	
 	bignum._sub = function(n1,n2,res) -- assume n1>n2>0, same base: n1-n2 -> res
 		local b = n1.base;
 		local m1 = #n1.digits;
@@ -106,7 +115,7 @@ if not bignum then
 			data[i] = j
 		end
 		
-		for i = maxi+1,M do	data[i] = nil end -- remove trailing zero digits
+		for i = maxi+1,M do	data[i] = nil end -- remove trailing zero digits if any
 		res.base = n1.base
 	end
 	
@@ -118,6 +127,18 @@ if not bignum then
 		say("_sub_test: " .. bignum.tostring(n1) .. " - " .. bignum.tostring(n2) .. " = " .. bignum.tostring(res))
 	end
 	--_sub_test()
+	
+	bignum.is_equal = function(n1,n2) -- assume both >0, same base. return true if n1==n2
+		local b = n1.base;
+		local data1 = n1.digits; local data2 = n2.digits;
+		if #data1~=#data2 then return false end
+		for i =#data1,1,-1 do -- from high bits
+			local d1 = data1[i];
+			local d2 = data2[i];
+			if d1~=d2 then return false end
+		end
+		return true -- all digits were ==
+	end
 	
 	bignum.is_larger = function(n1,n2) -- assume both >0, same base. return true if n1>=n2
 		local b = n1.base;
@@ -203,6 +224,10 @@ if not bignum then
 	end
 	--sub_test()
 	
+	-----------------------------------------------
+	--	MULTIPLY 
+	-----------------------------------------------
+	
 	bignum.mul = function(n1,n2,res)
 		
 		local base = n1.base
@@ -211,7 +236,7 @@ if not bignum then
 		local data1 = n1.digits; local m1 = #data1;
 		local data2 = n2.digits; local m2 = #data2;
 		
-		res.digits = {}
+		res.digits = {}; res.base = base
 		local data = res.digits; local m = m1+m2;
 		
 		local carry = 0
@@ -260,7 +285,7 @@ if not bignum then
 		--say("n1 = " .. bignum.tostring(n1) .. ", n2 = " .. bignum.tostring(n2))
 		say("mul benchmark. ".. m .. " digits, base " .. base .. ", repeats " .. r ..  " -> time " .. elapsed)
 	end
-	mul_bench()
+	--mul_bench()
 	
 	exp_test = function()
 		local n1 = bignum.importdec(2);
@@ -277,54 +302,161 @@ if not bignum then
 
 	end
 	--exp_test()
-	
-	--[[
-	rnd division: 
-		at each step observe only the highest digits and decide what the correct quotient digit is:
-		5325 : 62 -> 0, 2325 :22 -> here it could be either 0,or 1. have to test 1 and subtract. if <0 then it was 0.
-		350:12 = 30? rem = 350-30*12 < 0 so 20!  rem = rem + 10*12 = 110
-		110:12 = 10? rem = 110-10*12 < 0 so 0x!  decrease index for quotient digit and put 9!, rem = rem + 1*12 = 2, 
-		THE END
-	--]]
-	
-	bignum.div = function(N,D,res) -- res = quotient
-		
-		local base = N.base;
-		local rem = bignum.new(base,1, {})
-		
-		local tmp = bignum.new(base,1, {})
-		
-		local data = rem.data;
-		local dataD = D.digits; local mD = #dataD;
-		local dataN = N.digits;
-		
-		if mN<mD then return true end
 
-		for i = 1,#dataN do	data[i] = dataN[i] end -- rem = N, copy
+	-----------------------------------------------
+	--	DIVIDE
+	-----------------------------------------------
+	
+	bignum.div2 = function(n,res) -- res = n/2, return n % 2. note: its safe to do: bignum.div2(res,res);
+		
+		local base = n.base;
+		local data = n.digits; local m = #data;
+		
 		res.digits = {};
+		local rdata = res.digits;
+		local carry = 0
 		
-		local cD = dataD[mD];
-
+		local q = data[m]/2; 
+		local fq = math.floor(q);
+		if q~=fq then carry = base end
+		if fq>0 then rdata[m] = fq else rdata[m]=nil end -- maybe digits shrink by 1?
 		
-		--32245 : 12 = 3 or 2
-		local i = #dataN;
-		local j = i - #dataD;
-		while i > 0 do -- TODO!
-			local cN = dataN[i];
-			local q = math.floor(cN/cD);
-			if q == 0 then
-				j=j-1
-			else
-				local qdigits = {}; for k = 1,j-1 do qdigits[k] = 0 end; qdigits[j] = q;
-				local qj = bignum.new(base,1,qdigits); -- q*base^j
-				bignum.mul(qj, D,tmp); -- tmp = q*base^j*D
-				bignum.sub(rem,tmp, rem) -- rem = rem - tmp
-				res[j] == q
-				if rem.sgn<0 then bignum.add(rem,qj);res[j] = res[j]-1 end
-			end
+		for i = m-1,1,-1 do
+			local q = (data[i]+carry)/2;
+			local fq = math.floor(q)
+			if q~= fq then carry = base else carry = 0 end
+			rdata[i] = fq;
 		end
+		if carry ~= 0 then return 1 else return 0 end
+	end
+		
+	div2_test = function()
+		local ndec1 = math.random(10^8) 
+		local n1 = bignum.importdec(ndec1)
+		local res = bignum.new(10,1,n1.digits)
+		bignum.div2(res,res) -- res = res/2
+		
+		say("div2_test: n1/2 = " .. bignum.tostring(n1) .. "/2 = " .. bignum.tostring(res) .. " = res")
+		local rescheck = bignum.new(10,1,{})
+		bignum._add(res,res,res);bignum._sub(n1,res, res);
+		
+		say("CHECK: n1-2*res = " .. bignum.tostring(res))
 		
 	end
 	
+	--div2_test()
+	
+	--[[
+		very simple division that works reasonably well 
+		
+		strategy: bisection for f(x) = x*D + comparison with N, takes around Log_2(initial range) steps (sums+mults), 
+			so ~O(D^2*log base^(n2-n1))
+			low, mid, high. pick reasonably good initial range guess, like near order of magnitude close.
+			mid =  (low+high)/2
+			compute: compare N and mid*D, if N bigger then low = mid else high = mid..
+			??maybe: adjust N too, if N bigger then N = N-mid*D; low = 0; high = high - mid, add mid to separate q..
+		BENCHMARKS: (amd ryzen 1200)
+			HUGE N=10k bit number/ D=5k bit number : 1.5 s
+			N = 1040 bit, D = 520 bit: 0.0042 s ( typical application srp,diffie-hellman in Z_~2^512 group)
+		--]]
+	
+	bignum.div = function(N,D, res) -- res = [N/D]
+		
+		local base = N.base;
+		res.base = base
+		res.digits = {}; 
+		local data = res.digits; 
+		
+		local n1 = #N.digits;local n2 = #D.digits;
+		-- trivial cases, prevent wasting time here
+		if n1<n2 then res.digits = {0}; return end -- clearly N<D
+		if n2 == 1 and D.digits[1] == 1 then res.digits = N.digits return end -- division by 1!
+		
+		local low = bignum.new(base,1,{})
+		local high = bignum.new(base,1,{})
+		-- better initial range for less needed iterations
+		local ldigits = low.digits;local hdigits = high.digits;
+		for i = 1,n1-n2 do ldigits[i]=0;hdigits[i]=0 end
+		ldigits[n1-n2]=N.digits[n1];hdigits[n1-n2+1] = ldigits[n1-n2];
+		--say("low " .. bignum.tostring(low) .. " high " .. bignum.tostring(high))
+		
+		local mid = bignum.new(base,1,{});
+		local temp = bignum.new(base,1,{});
+		local step = 0;
+		
+		while step < 100000 do -- low self confidence :)
+			step = step + 1
+			bignum._add(low,high,mid); bignum.div2(mid,mid); -- mid = (low+high)/2
+			
+			if bignum.is_equal(low,mid) then 
+				--say("DONE. step  " .. step) -- .. " low = " .. bignum.tostring(low) .. " high = " .. bignum.tostring(high) .. " mid = " .. bignum.tostring(mid))
+				res.digits = mid.digits
+				return
+			end
+
+			bignum.mul(D, mid, temp) -- temp = D*mid
+			if bignum.is_larger(N,temp) then low.digits = mid.digits else high.digits = mid.digits end
+		end
+	end
+	
+	
+	div_test = function()
+		local ndec1 = math.random(10^8) 
+		local n1 = bignum.importdec(ndec1)
+		local ndec2 = math.random(10^6)
+		local n2 = bignum.importdec(ndec2)
+		
+		local res = bignum.new(10,1,{})
+		bignum.div(n1,n2,res)
+		
+		local temp = bignum.new(10,1,{})
+		bignum.mul(n2,res,temp);bignum._sub(n1,temp,temp) -- temp = n1 - n2*res
+		
+		say(ndec1/ndec2)
+		say("n1/n2 =  " .. bignum.tostring(n1) .. " / " .. bignum.tostring(n2) .. " = res = " .. bignum.tostring(res) .. ", residue n1-n2*res = " .. bignum.tostring(temp) .. (bignum.is_larger(n2,temp) and " (IS SMALLER THAN n2) " or " FAIL."))
+	end
+	--div_test()
+	
+	divbignum_test = function()
+		local m = 300;
+		local base = 2^26
+		local n1 = bignum.rnd(base, 1, m)
+		local n2 = bignum.rnd(base, 1, m/2)
+		local res = {sgn=1, digits = {}};
+		local t = os.clock();bignum.div(n1,n2,res); local elapsed = os.clock() - t;
+		
+		local temp = {sgn=1, digits = {}};
+		bignum.mul(n2,res,temp);bignum._sub(n1,temp, res); -- res = n1-n2*res
+		if bignum.is_larger(n2, res) then 
+			say("divbignum_test : residue n1 - n2*res is smaller than n2. OK.") 
+		else
+			say("divbignum_test : residue n1 - n2*res is NOT smaller than n2. FAIL.") 
+		end
+	end
+	
+	--divbignum_test()
+	
+	div_bench = function()
+		local m = 40;
+		local base = 2^26
+		local r = 100
+		
+		local n1 = bignum.rnd(base, 1, m)
+		local n2 = bignum.rnd(base, 1, m/2)
+		local res = {sgn=1, digits = {}};
+		local t = os.clock()
+		for i = 1, r do	bignum.div(n1,n2,res) end
+		local elapsed = os.clock() - t;
+		say("n1 = " .. bignum.tostring(n1) .. "\nn2 = " .. bignum.tostring(n2) .. "\nn1/n2 = "  .. bignum.tostring(res))
+		say("div benchmark. n1 (".. m .. " digits ( " .. 26*m .." bits)), n2 (" .. m/2 .. " digits), base " .. base .. ", repeats " .. r ..  " -> time " .. elapsed)
+	end
+	
+	div_bench()
+	
+	-----------------------------------------------
+	--	MODULAR MULTIPLY
+	-----------------------------------------------
+
+	-- a,b in Z_n -> a*b mod n = ?
 	
 end
