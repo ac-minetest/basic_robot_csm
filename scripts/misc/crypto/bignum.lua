@@ -1,4 +1,4 @@
--- BIGNUM by rnd v05112018b
+-- BIGNUM by rnd v05122018b
 -- functions: new, tostring, rnd, importdec, _add, _sub, mul, div2, div, is_larger, is_equal, add, sub, bignum.mod
 
 if not bignum then
@@ -360,8 +360,10 @@ if not bignum then
 			N = 8k bit number / D = 4k bit number : 0.7s
 			N = 1040 bit, D = 520 bit: 0.0042 s ( typical application srp,diffie-hellman in Z_~2^512 group)
 			if D is 3900 bits it takes around 3900 steps of iteration
-				amd-e350 apu 1.6ghz (2010)
-			N = 8k bit, D = 4k bit, divide takes 44s ( 60x slower than ryzen)
+				amd-e350 apu 1.6ghz (sep 2010)
+					N = 8k bit, D = 4k bit, divide takes 44s ( 60x slower than ryzen)
+				AMD Dual Core E2-1800 (july 2012)
+					N = 8k bit, D = 4k bit, 5.25s
 		TODO: 
 			possible speed improve ?: after there are some digits correct
 			reduce N by N = N-q0*D which will effectively decrease N and multiplies of mid ( smaller numbers ). then keep adding 
@@ -461,7 +463,7 @@ if not bignum then
 		say("div benchmark. n1 (".. m .. " digits ( " .. 26*m .." bits)), n2 (" .. m/2 .. " digits), base " .. base .. ", repeats " .. r ..  " -> time " .. elapsed)
 	end
 	
-	div_bench()
+	--div_bench()
 	
 	-----------------------------------------------
 	--	MODULAR MULTIPLY
@@ -532,5 +534,57 @@ if not bignum then
 		
 	end
 	--mod_test()
-
+	
+	--  computing a^b mod n using modular exponentiation : 
+	--  1. suppose we have b = sum_i b_i*2^i ( binary expansion). Then a^b = prod_i a^(2^i) a^b_i.
+	-- 		we start from low bits and multiply with new term each step. we compute a^(2^i) mod n iteratively, with a = a^2 mod n.
+	--		In each step if b_i == 1 we multiply with a. Work: 2-3 multiplies each step
+	--  2. we could first compute all b_i and then start from high end ( like efficient polynomial evaluate):
+	--  	res = res^2*a^(b_i) mod n . work (1-2 multiplies per step + all b_i).
+	
+	-- method 1 
+	bignum.modpow = function(a_,b_,barrett) -- efficiently calculate a^b mod n, need log_2 b steps
+		local base = a_.base
+		local a = bignum.new(base,1,a_.digits); -- base
+		local b = bignum.new(base,1,b_.digits); -- exponent
+		local bdata = b.digits;
+		
+		local ret = bignum.new(base,1,{1});
+		local temp = bignum.new(base,1,{});
+		
+		while (#bdata > 1 or (#bdata==1 and bdata[1] > 0)) do -- b>0
+			if bdata[1] % 2 == 1 then
+				bignum.mul(ret, a, temp) 
+				bignum.mod(temp,barrett, ret) -- ret = a*ret % n
+			end
+			bignum.div2(b,b); bdata = b.digits -- b = b/2
+			
+			bignum.mul(a,a,temp);bignum.mod(temp,barrett, a) -- a=a^2 % n
+		end
+		return ret
+	end
+	
+	-- base 2^26. times for ryzen 3 1200: m=40: 0.142, m = 30: 0.07, m = 20: 0.028
+	modpow_test = function()
+		local m = 20;
+		local bits = 26
+		local base = 2^bits;
+		local a = bignum.rnd(base, 1, m)
+		local b = bignum.rnd(base, 1, m)
+		local c = bignum.rnd(base, 1, m)
+		local n = bignum.rnd(base, 1, m)
+		
+		local barrett = bignum.get_barrett(n) -- precompute this from modulo n
+		local t = os.clock()
+		local resb = bignum.modpow(a,b, barrett); -- a^b
+		t = os.clock()-t
+		local resc = bignum.modpow(a,c, barrett); -- a^c
+		local resbc = bignum.modpow(resb,c, barrett); -- (a^b)^c
+		local rescb = bignum.modpow(resc,b, barrett); -- (a^c)^b
+		
+		say("modpow_test: (a^b)^c = " .. bignum.tostring(resbc) .. "\nCHECK equality (a^b)^c == (a^c)^b : " .. (bignum.is_equal(resbc,rescb) and "OK" or "FAIL"))
+		say("settings: base " .. base .. ", digits " .. m .. " (" ..  m*bits .." bits), time for a^b : " .. t)
+	end
+	modpow_test()
+	
 end
