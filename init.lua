@@ -892,6 +892,9 @@ local random = function(n)
 	return rndseed % n
 end
 
+crypto.random = random;
+crypto.randomseed = function(seed) rndseed = seed end
+
 local string2arr = function(input) -- convert string to array of numbers
 	local m = 32; -- ascii 32-128
 	local out = {}
