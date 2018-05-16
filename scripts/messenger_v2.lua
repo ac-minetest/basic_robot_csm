@@ -1,21 +1,24 @@
 --MESSENGER with rnd auth and key exchange v2
--- v05162018a
+-- v05162018b
 -- 'public' key is exchanged securely (2048 bit diffie-hellman in safe-prime group). After that chat will be secure in future. 
 -- Every session key is randomized and securely exchanged with srp (secure remote password) like protocol.
 
 if not init then
-	msgerver = "05162018a"
+	msgerver = "05162018b"
 	
-	myid = {id = "rnd", name = minetest.localplayer:get_name()} -- real identity & playername
-	targetid = {id = "qtest", name = "qtest"}
+	targetid = {id = "qtest", name = "qtest"} -- real identity & playername
+	myid = {id = "rnd", name = minetest.localplayer:get_name()} 
 	
-	-- myid = {id = "qtest", name = minetest.localplayer:get_name()}
 	-- targetid = {id = "rnd", name = "rnd"} -- real identity & playername
+	-- myid = {id = "qtest", name = minetest.localplayer:get_name()}
 	
 	keygen = 0; -- both players set this to 1 to generate keys, 0 normal operation
 	DEBUG = false;
 	
-	keys = { -- SECRET KEYS: for yourself write in: private key, public key. for other player write {} in place of private key.
+	-- SECRET KEYS: for yourself write in: private key, public key. for other player write {} in place of private key.
+	-- keys are also loaded from mod_storage.
+	keys = minetest.deserialize(self.mod_storage:get_string("messenger_keys"));
+	keys = { 
 		["rnd"] = { -- example key 1
 			{60227623,46389398,20212560,1928456,17581522,42183044,23725678,27499309,3783593,54987897,40067024,9140480,54988048,28337331,64166027,26274406,8460339,6838224,66907618,44161472},
 			{47579664,27058528,59244496,1271608,6597517,7830218,64912858,32441757,65442648,20887656,13467151,25916496,57086179,46485250,61517166,15185070,11397902,15695474,16048476,12241490}
@@ -40,7 +43,7 @@ if not init then
 	
 	welcomemsg = function()
 		if keygen == 1 then
-			say(minetest.colorize("red", "#MESSENGER v" .. msgerver .. ". hold w+s to generate and (2048 bit) securely exchange private/public key or wait to receive one."))
+			say(minetest.colorize("red", "#MESSENGER v" .. msgerver .. ". hold w+s to generate and (2048 bit) securely exchange private/public key or wait to receive one. say ,keys to view existing keys and ,deletekeys to delete all keys."))
 		else
 			say(minetest.colorize("red", "#MESSENGER v" .. msgerver .. ". hold w+s to establish authenticated secure connection with " .. targetid.id .. " or wait to receive one."))
 		end
@@ -153,6 +156,7 @@ if not init then
 		local msg = "";	while msg do msg = self.listen_msg() end
 	end
 	empty_chat_buffer()
+	self.listen_msg(); -- empty sent msg buffer
 	
 	extract_digits = function(msg)
 		local digits = {}
@@ -224,9 +228,36 @@ if keygen == 1 then -- generating & exchanging 'public' key for one of the clien
 						end
 					end
 				end
-			elseif minetest.localplayer:get_key_pressed() == 3 then
-				say("GENERATING PUBLIC/PRIVATE KEY PAIR & ESTABLISHING SECURE 2048 bit CONNECTION...")
-				state = 1; mode = 0; step = 0 --> sending Gb
+			else
+				local keypressed = minetest.localplayer:get_key_pressed() 
+				--say("KEY " .. keypressed)
+				if keypressed == 3 then
+					if keys[myid.id] then 
+						say("WARNING! key for " .. myid.id .. " already exists. hold SHIFT+w+s send existing key. hold shift+a+d to create new key.") 
+					else
+						say("GENERATING PUBLIC/PRIVATE KEY PAIR & ESTABLISHING SECURE 2048 bit CONNECTION...")
+						state = 1; mode = 0; step = 0 --> sending Gb
+					end
+				elseif keypressed == 67 then
+					say("GENERATING PUBLIC/PRIVATE KEY PAIR & ESTABLISHING SECURE 2048 bit CONNECTION...")
+					state = 1; mode = 0; step = 0 --> sending Gb
+				elseif keypressed == 76 then
+					say("GENERATING PUBLIC/PRIVATE KEY PAIR & ESTABLISHING SECURE 2048 bit CONNECTION...")
+					keys[myid.id] = nil
+					state = 1; mode = 0; step = 0 --> sending Gb
+				end
+			end
+			msg = self.sent_msg();
+			if msg then
+				if msg == "keys" then
+					msg = minetest.serialize(keys)
+					local form = "size[10.5,10] textarea[0,0;11,12;MSG;KEYS;" .. minetest.formspec_escape(msg) .. "]"
+					minetest.show_formspec("robot", form);
+				elseif msg == "deletekeys" then
+					keys = {};
+					self.mod_storage:set_string("messenger_keys", minetest.serialize(keys))
+					say("ALL KEYS DELETED!")
+				end
 			end
 		elseif mode == 1 then -- sending Gc
 			step = step + 1
@@ -249,6 +280,9 @@ if keygen == 1 then -- generating & exchanging 'public' key for one of the clien
 						msg = "public key = {"..table.concat(edigits,",").."}";
 						local form = "size[5,5] textarea[0,0;6,6;MSG;PUBLIC KEY FROM " .. targetid.name .. ";" .. minetest.formspec_escape(msg) .. "]"
 						minetest.show_formspec("robot", form);
+						
+						keys[targetid.id] = {{},v.digits}; -- store key
+						self.mod_storage:set_string("messenger_keys", minetest.serialize(keys)) -- save keys in mod_storage
 						
 						send = nil; Gbc = nil; c = nil; Gb = nil; Gc = nil;  --cleanup
 						keygen = 0; mode = 0; state = 0;
@@ -310,11 +344,15 @@ if keygen == 1 then -- generating & exchanging 'public' key for one of the clien
 						local G = bignum.new(base, 1, {2})
 						local Gcb  = bignum.modpow(Gc,b, barrett2048) -- session key
 						
-						-- compute v = g^x and send it
-						x = bignum.rnd(base, 1, m/4) -- private key: m=20, 520 bit!
-						local G = bignum.new(base, 1, {2})
-						v = bignum.modpow(G,x, barrett512) -- public key v = g^x
-						
+						if not keys[myid.id] then
+							-- compute v = g^x and send it
+							x = bignum.rnd(base, 1, m/4) -- private key: m=20, 520 bit!
+							local G = bignum.new(base, 1, {2})
+							v = bignum.modpow(G,x, barrett512) -- public key v = g^x
+						else -- take existing key
+							x = bignum.new(base, 1, keys[myid.id][1])
+							v = bignum.new(base, 1, keys[myid.id][2])
+						end
 						-- password is Gcb.digits - 2048 bit
 					
 						say("/msg " .. targetid.name .. " " .. chatchar1 .. crypto.encrypt(" " .. table.concat(v.digits,"'"), Gcb.digits),true)
@@ -322,6 +360,11 @@ if keygen == 1 then -- generating & exchanging 'public' key for one of the clien
 						-- display keys so they can be written down
 						
 						msg = "private x = {"..table.concat(x.digits,",").."}\n public v = {" .. table.concat(v.digits,",").."}";
+						if not keys[myid.id] then
+							keys[myid.id] = {x.digits,v.digits}; -- store key
+							self.mod_storage:set_string("messenger_keys", minetest.serialize(keys)) -- save keys in mod_storage
+						end
+						
 						local form = "size[5,5] textarea[0,0;6,6;MSG;PRIVATE/PUBLIC KEY;" .. minetest.formspec_escape(msg) .. "]"
 						
 						send = nil; Gc = nil; Gcb = nil; x = nil; v = nil; b = nil; Gb = nil; --cleanup
@@ -351,7 +394,7 @@ if keygen == 1 then -- generating & exchanging 'public' key for one of the clien
 						local y = bignum.new(base,1,extract_digits(msg));
 
 						local key = keys[myid.id];
-						if not key or not key[2] or not key[1] then say("ERROR: you need to private/public key for " .. myid.id); self.remove() end
+						if not key or not key[2] or not key[1] then say("ERROR: you need to add private/public key for " .. myid.id ..". put keygen = 1 and let " .. myid.id .. " hold w+s."); self.remove() end
 						local x = bignum.new(base,1,key[1]);
 						local v = bignum.new(base,1,key[2]);
 						local yv = bignum.new(base,1,{});bignum._sub(y,v,yv); -- yv = y-v
@@ -366,11 +409,10 @@ if keygen == 1 then -- generating & exchanging 'public' key for one of the clien
 						say("ERROR: wrong init packet. resetting. ")
 						init = false
 					end
-
 				elseif minetest.localplayer:get_key_pressed() == 3 then
 					say(minetest.colorize("red","GENERATING challenge and sending it to " .. targetid.name))
 					local key = keys[targetid.id];
-					if not key or not key[2] then say("ERROR: you need to add public key for " .. targetid.id); self.remove() end
+					if not key or not key[2] then say("ERROR: you need to add public key for " .. targetid.id..". put keygen = 1 and let " .. myid.id .. " hold w+s."); self.remove() end
 					local base = 2^26; local m = 20;
 					local v = bignum.new(base,1,key[2]);
 					local r = bignum.rnd(base, 1, m)
