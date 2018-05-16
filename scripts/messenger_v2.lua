@@ -345,21 +345,28 @@ if keygen == 1 then -- generating & exchanging 'public' key for one of the clien
 				if msg then -- received y
 					local i = string.find(msg,chatchar1);
 					msg = string.sub(msg,i+string.len(chatchar1));
-					local base = 2^26;
-					local y = bignum.new(base,1,extract_digits(msg));
-					
-					local key = keys[myid.id];
-					if not key or not key[2] or not key[1] then say("ERROR: you need to private/public key for " .. myid.id); self.remove() end
-					local x = bignum.new(base,1,key[1]);
-					local v = bignum.new(base,1,key[2]);
-					local yv = bignum.new(base,1,{});bignum._sub(y,v,yv); -- yv = y-v
-					local t = os.clock()
-					sessionkey = bignum.modpow(yv,x, barrett512).digits -- yv^x
-					if DEBUG then say("time " .. os.clock()-t) end
-					--say("DEBUG SESSION KEY " .. minetest.serialize(sessionkey))
-					say(minetest.colorize("yellow", "MESSENGER " .. msgerver .. " READY.")) 
-					--local response = crypto.rndhash(table.concat(sessionkey,"'"),512) -- OPTIONAL
-					state = 1;
+					msg = crypto.decrypt(msg, password0)
+					if string.sub(msg,1,1) == " " then
+						local base = 2^26;
+						local y = bignum.new(base,1,extract_digits(msg));
+
+						local key = keys[myid.id];
+						if not key or not key[2] or not key[1] then say("ERROR: you need to private/public key for " .. myid.id); self.remove() end
+						local x = bignum.new(base,1,key[1]);
+						local v = bignum.new(base,1,key[2]);
+						local yv = bignum.new(base,1,{});bignum._sub(y,v,yv); -- yv = y-v
+						local t = os.clock()
+						sessionkey = bignum.modpow(yv,x, barrett512).digits -- yv^x
+						if DEBUG then say("time " .. os.clock()-t) end
+						--say("DEBUG SESSION KEY " .. minetest.serialize(sessionkey))
+						say(minetest.colorize("yellow", "MESSENGER " .. msgerver .. " READY.")) 
+						--local response = crypto.rndhash(table.concat(sessionkey,"'"),512) -- OPTIONAL
+						state = 1;
+					else
+						say("ERROR: wrong init packet. resetting. ")
+						init = false
+					end
+
 				elseif minetest.localplayer:get_key_pressed() == 3 then
 					say(minetest.colorize("red","GENERATING challenge and sending it to " .. targetid.name))
 					local key = keys[targetid.id];
@@ -373,7 +380,7 @@ if keygen == 1 then -- generating & exchanging 'public' key for one of the clien
 					if DEBUG then say("time " .. os.clock()-t) end
 					local y = bignum.new(base,1,{});
 					bignum._add(gr,v,y) -- y = g^r+v
-					say("/msg " .. targetid.name .. " " .. chatchar1.. table.concat(y.digits,"'"),true) -- send challenge
+					say("/msg " .. targetid.name .. " " .. chatchar1.. crypto.encrypt(" " .. table.concat(y.digits,"'"),password0),true) -- send challenge
 					
 					sessionkey = bignum.modpow(v,r, barrett512).digits; -- v^r
 					say(minetest.colorize("yellow", "MESSENGER " .. msgerver .. " READY.")) 
@@ -389,6 +396,9 @@ if keygen == 1 then -- generating & exchanging 'public' key for one of the clien
 				local dec = crypto.decrypt(msg, sessionkey);
 				if string.sub(dec,1,1)~=" " then 
 					say(minetest.colorize("red", "WARNING: " .. targetid.name .. " is using different session key! Resetting." ))
+					-- reset target messenger by sending random garbage
+					minetest.after(crypto.random(3),
+						function()	say("/msg " .. targetid.name .. " " .. chatchar1 .. crypto.rndhash(" " .. crypto.random(2^30)),true) end)
 					init = false;
 				else
 					say(minetest.colorize("lawngreen", "[" .. targetid.id .. "]" .. dec ))
