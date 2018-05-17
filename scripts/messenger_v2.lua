@@ -18,7 +18,7 @@ if not init then
 	
 	-- SECRET KEYS: for yourself write in: private key, public key. for other player write {} in place of private key.
 	-- keys are also loaded from mod_storage.
-	keys = minetest.deserialize(self.mod_storage:get_string("messenger_keys"));
+	keys = minetest.deserialize(self.mod_storage:get_string("messenger_keys"));	if not keys then keys = {} end
 	-- keys = { 
 		-- ["qtest"] ={ -- example key
 			-- {48956649,6888054,39208061,49336825,13139894,28782086,33649864,52015757,41052181,6366916,19073280,28595777,9004077,49422303,3197447,56119809,34730143,60487773,51346526,36586011},
