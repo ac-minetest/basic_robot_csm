@@ -4,7 +4,7 @@
 -- Every session key is randomized and securely exchanged with srp (secure remote password) like protocol.
 
 if not init then
-	msgerver = "05172018a"
+	msgerver = "05172018b"
 	
 	targetid = {id = "qtest", name = "qtest"} -- WRITE IN WHO you want to talk to - id = real identity & name = current playername
 	myid = {id = "rnd", name = minetest.localplayer:get_name()}  -- your identity
@@ -276,11 +276,12 @@ if keygen == 1 then -- generating & exchanging 'public' key for one of the clien
 						local form = "size[5,5] textarea[0,0;6,6;MSG;PUBLIC KEY FROM " .. targetid.name .. ";" .. minetest.formspec_escape(msg) .. "]"
 						minetest.show_formspec("robot", form);
 						
-						keys[targetid.id] = {{},v.digits}; -- store key
+						keys[targetid.id] = {{},edigits}; -- store key
 						self.mod_storage:set_string("messenger_keys", minetest.serialize(keys)) -- save keys in mod_storage
+						say(minetest.colorize("orange","PUBLIC KEY FOR " .. targetid.id .. " RECEIVED AND SAVED. RESTART .b 1"))
 						
 						send = nil; Gbc = nil; c = nil; Gb = nil; Gc = nil;  --cleanup
-						keygen = 0; mode = 0; state = 0;
+						self.remove()
 					end
 				end
 				end
@@ -364,6 +365,7 @@ if keygen == 1 then -- generating & exchanging 'public' key for one of the clien
 						
 						send = nil; Gc = nil; Gcb = nil; x = nil; v = nil; b = nil; Gb = nil; --cleanup
 						minetest.show_formspec("robot", form);
+						self.remove()
 						
 					end
 				end
