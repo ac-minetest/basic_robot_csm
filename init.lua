@@ -2,7 +2,7 @@
 
 
 basic_robot = {};
-basic_robot.version = "04/15/2018b";
+basic_robot.version = "05/17/2018a";
 basic_robot.data = {}; -- stores all robot data
 basic_robot.data.rom = {}
 
@@ -66,6 +66,8 @@ function getSandboxEnv ()
 				basic_robot.data.formname = nil; 
 				return formname,fields
 			end,
+			
+			mod_storage = mod_storage,
 			
 			remove = function()
 				error("abort")
