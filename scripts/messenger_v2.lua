@@ -4,15 +4,16 @@
 -- Every session key is randomized and securely exchanged with srp (secure remote password) like protocol.
 
 if not init then
-	msgerver = "05162018b"
+	msgerver = "05172018a"
 	
-	targetid = {id = "qtest", name = "qtest"} -- real identity & playername
-	myid = {id = "rnd", name = minetest.localplayer:get_name()} 
+	targetid = {id = "qtest", name = "qtest"} -- WHO you want to talk to - real identity & playername
+	myid = {id = "rnd", name = minetest.localplayer:get_name()}  -- your identity
 	
 	-- targetid = {id = "rnd", name = "rnd"} -- real identity & playername
 	-- myid = {id = "qtest", name = minetest.localplayer:get_name()}
 	
-	keygen = 0; -- both players set this to 1 to generate keys, 0 normal operation
+	
+	------------------------------------------------------
 	DEBUG = false;
 	
 	-- SECRET KEYS: for yourself write in: private key, public key. for other player write {} in place of private key.
@@ -25,10 +26,8 @@ if not init then
 		-- },
 	-- }
 	
-	------------------------------------------------------
-	
-	
-	timeout = 5;
+	keygen = 0; -- both players set this to 1 to generate keys, 0 normal operation
+	timeout = 5; -- unused (yet)
 	chatchar1 = "''";
 	chatchar0 = ": ";
 	self.msg_filter(targetid.name .. chatchar0 .. chatchar1)  -- PM from name to name: @@xxxx
@@ -39,9 +38,9 @@ if not init then
 	
 	welcomemsg = function()
 		if keygen == 1 then
-			say(minetest.colorize("red", "#MESSENGER v" .. msgerver .. ". hold w+s to generate and (2048 bit) securely exchange private/public key or wait to receive one. say ,keys to view existing keys and ,deletekeys to delete all keys."))
+			say(minetest.colorize("red", "#MESSENGER v" .. msgerver .. ". hold w+s to generate and exchange private/public key or wait to receive one. say ,1 to view existing keys and ,2 to delete all keys."))
 		else
-			say(minetest.colorize("red", "#MESSENGER v" .. msgerver .. ". hold w+s to establish authenticated secure connection with " .. targetid.id .. " or wait to receive one."))
+			say(minetest.colorize("red", "#MESSENGER v" .. msgerver .. ". hold w+s to establish authenticated secure connection with " .. targetid.id .. " or wait to receive one.say ,1 to enter key management."))
 		end
 	end
 	welcomemsg()
@@ -245,11 +244,11 @@ if keygen == 1 then -- generating & exchanging 'public' key for one of the clien
 			end
 			msg = self.sent_msg();
 			if msg then
-				if msg == "keys" then
+				if msg == "1" then
 					msg = minetest.serialize(keys)
 					local form = "size[10.5,10] textarea[0,0;11,12;MSG;KEYS;" .. minetest.formspec_escape(msg) .. "]"
 					minetest.show_formspec("robot", form);
-				elseif msg == "deletekeys" then
+				elseif msg == "2" then
 					keys = {};
 					self.mod_storage:set_string("messenger_keys", "return {}")
 					say("ALL KEYS DELETED!")
@@ -408,7 +407,7 @@ if keygen == 1 then -- generating & exchanging 'public' key for one of the clien
 				elseif minetest.localplayer:get_key_pressed() == 3 then
 					say(minetest.colorize("red","GENERATING challenge and sending it to " .. targetid.name))
 					local key = keys[targetid.id];
-					if not key or not key[2] then say("ERROR: you need to add public key for " .. targetid.id..". put keygen = 1 and let " .. myid.id .. " hold w+s."); self.remove() end
+					if not key or not key[2] then say("ERROR: you need to add public key for " .. targetid.id..". put keygen = 1 and let " .. targetid.id .. " hold w+s."); self.remove() end
 					local base = 2^26; local m = 20;
 					local v = bignum.new(base,1,key[2]);
 					local r = bignum.rnd(base, 1, m)
@@ -425,6 +424,10 @@ if keygen == 1 then -- generating & exchanging 'public' key for one of the clien
 					--say("DEBUG SESSION KEY " .. minetest.serialize(sessionkey))
 					--response =  crypto.rndhash(table.concat(sessionkey,"'"),512) -- OPTIONAL
 					state = 1; -- normal operation
+				end
+				msg = self.sent_msg();
+				if msg and msg == "1" then
+					keygen = 1;	welcomemsg()
 				end
 			end
 		elseif state == 1 then
