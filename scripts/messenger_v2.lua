@@ -6,7 +6,7 @@
 if not init then
 	msgerver = "05172018a"
 	
-	targetid = {id = "qtest", name = "qtest"} -- WHO you want to talk to - real identity & playername
+	targetid = {id = "qtest", name = "qtest"} -- WRITE IN WHO you want to talk to - id = real identity & name = current playername
 	myid = {id = "rnd", name = minetest.localplayer:get_name()}  -- your identity
 	
 	-- targetid = {id = "rnd", name = "rnd"} -- real identity & playername
@@ -389,7 +389,7 @@ if keygen == 1 then -- generating & exchanging 'public' key for one of the clien
 						local y = bignum.new(base,1,extract_digits(msg));
 
 						local key = keys[myid.id];
-						if not key or not key[2] or not key[1] then say("ERROR: you need to add private/public key for " .. myid.id ..". put keygen = 1 and let " .. myid.id .. " hold w+s."); self.remove() end
+						if not key or not key[2] or not key[1] then say("ERROR: you need to add private/public key for " .. myid.id ..". both player should enter ,1 (key management) and let " .. myid.id .. " hold w+s to (generate) and send you his public key."); self.remove() end
 						local x = bignum.new(base,1,key[1]);
 						local v = bignum.new(base,1,key[2]);
 						local yv = bignum.new(base,1,{});bignum._sub(y,v,yv); -- yv = y-v
@@ -407,7 +407,7 @@ if keygen == 1 then -- generating & exchanging 'public' key for one of the clien
 				elseif minetest.localplayer:get_key_pressed() == 3 then
 					say(minetest.colorize("red","GENERATING challenge and sending it to " .. targetid.name))
 					local key = keys[targetid.id];
-					if not key or not key[2] then say("ERROR: you need to add public key for " .. targetid.id..". put keygen = 1 and let " .. targetid.id .. " hold w+s."); self.remove() end
+					if not key or not key[2] then say("ERROR: you need to add private/public key for " .. targetid.id ..". both player should enter ,1 (key management) and let " .. targetid.id .. " hold w+s to (generate) and send you his public key."); self.remove() end
 					local base = 2^26; local m = 20;
 					local v = bignum.new(base,1,key[2]);
 					local r = bignum.rnd(base, 1, m)
