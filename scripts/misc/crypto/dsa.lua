@@ -28,7 +28,7 @@
 -- 3. CAREFUL! k1 s1 = (h1+r1*x), k2 s2 =(h2+r2*x) -> k1 s1- k2 s2  - (h1-h2) = (r1-r2)*x.
 -- so if we know there is little difference between k1,k2 we can try small sample different k2 and try to solve for x!
 
-local bignum = _G.bignum
+local bignum = _G.bignum; local crypto = _G.crypto;
 
 --512 bit
 --c1d3a133c9b3720da868dda10b6a0bde0e1a47d797d3e02f2673157ad26c33970553352abd72114a48813b3f1a3d86120c2150d9c33780bf0ce31acf2e28b813
@@ -82,7 +82,7 @@ DSA = {};
 -- w in Z_q such that: g^(hash(m)*w + x*r*w) %p %q = g^k %p %q
 -- this is easy if we know x -> solve w*(h+x*r) = k in Z_q -> w = (h+x*r)^-1*k in Z_q
 
-DSA.sign = function(msg,x) -- msg = (hash) message as number, x = private key 
+local DSA_sign = function(msg,x) -- msg = (hash) message as number, x = private key 
 	local m = 20; local base = 2^26;
 	local temp = bignum.rnd(base,1,m); -- random value, k should be <q!
 	local k = bignum.new(base,1,{}); bignum.mod(temp, barrettq, k);
@@ -106,18 +106,18 @@ DSA.sign = function(msg,x) -- msg = (hash) message as number, x = private key
 	return {r,w} -- w = temp1 = (m+x*r)^-1*k in Z_q
 end
 
-dsa_sign_test = function()
+local dsa_sign_test = function()
 	
 	local x = bignum.rnd(2^26,1,20) -- private key
 	local g = bignum.new(2^26,1,{2^2});
 	local y = bignum.modpow(g,x,barrettp); -- public key
 	local msg = bignum.importascii("hello world",2^26) -- will cut off at 520 bytes, use hash here for real thing
-	local sig = DSA.sign(msg,x)
+	local sig = DSA_sign(msg,x)
 	--say(minetest.serialize(sig))
 end
 --dsa_sign_test()
 
-DSA.verify = function(msg,sig,y,x,k) -- m = message, sig = {r,w} =  signature, y = public key (= g^x)
+local DSA_verify = function(msg,sig,y) -- m = message, sig = {r,w} =  signature, y = public key (= g^x)
 	-- CHECK: g^(m*w) * y^(r*w) %p %q == r
 	local temp1 = bignum.new(base,1,{});
 	local m = 20; local base = 2^26;
@@ -132,20 +132,59 @@ DSA.verify = function(msg,sig,y,x,k) -- m = message, sig = {r,w} =  signature, y
 	return bignum.is_equal(temp,sig[1])
 end
 
-
-dsa_test = function()
+local dsa__test = function()
 	local x = bignum.rnd(2^26,1,20) -- private key
 	local g = bignum.new(2^26,1,{2^2});
 	local y = bignum.modpow(g,x,barrettp) -- public key
 	
 	local msg = bignum.importascii("hello world",2^26) -- will cut off at 520 bytes, use hash here for real thing
-	local sig = DSA.sign(msg,x)
-	local ok = DSA.verify(msg,sig,y)
+	local sig = DSA_sign(msg,x) -- create signature
+	local ok = DSA_verify(msg,sig,y) -- verify signature
+	
+	say(bignum.exportbase64(sig[1]) .."&" .. bignum.exportbase64(sig[2]))
 	
 	say(ok and "signature ok." or "signature failed.")
 end
-dsa_test()
+--dsa__test()
 
 
+DSA.sign = function(msg,privatekey)
+	local x = bignum.importbase64(privatekey,2^26)
+	local hash = bignum.importascii(crypto.rndhash(msg,512),2^26);
+	local sig = DSA_sign(hash,x);
+	return bignum.exportbase64(sig[1]) .."&" .. bignum.exportbase64(sig[2])
+end
+
+DSA.verify = function(msg,sig,publickey)
+	local y = bignum.importbase64(publickey,2^26)
+	local hash = bignum.importascii(crypto.rndhash(msg,512),2^26);
+	local i = string.find(sig,"&")
+	local rs,ws;
+	if i then rs = string.sub(sig,1,i-1); ws = string.sub(sig,i+1) else return false end
+	local r = bignum.importbase64(rs,2^26);local w = bignum.importbase64(ws,2^26);
+	return DSA_verify(hash,{r,w},y)
+end
+
+
+local DSAtest = function ()
+	say(minetest.colorize("red","DSA by rnd"))
+	local privatex = bignum.rnd(2^26,1,20)
+	local privatekey = bignum.exportbase64(privatex);
+	say("PRIVATE KEY = " .. privatekey)
+	
+	local publicy = bignum.modpow(bignum.new(2^26,1,{2^2}),privatex,barrettp)
+	local publickey = bignum.exportbase64(publicy);
+
+	say("PUBLIC KEY = " .. publickey)
+	
+	local msg = "i, rnd, state that i wrote all this from scratch :)";
+	say("MESSAGE = " .. msg)
+	local sig = DSA.sign(msg,privatekey)
+	say("SIGNATURE = " .. sig)
+	local ok = DSA.verify(msg,sig,publickey);
+	
+	if ok then say(minetest.colorize("lawngreen","VERIFY: ok")) else say(minetest.colorize("red","VERIFY: fail")) end
+end
+DSAtest()
 
 self.remove()
