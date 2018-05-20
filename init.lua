@@ -497,8 +497,14 @@ bignum.new = function(base,sgn, digits)
 	ret.sgn = sgn -- sign of number,+1 or -1
 	local data = ret.digits;
 	local m = #digits;
-	ret.digits = digits; -- THIS SEEMS TO MAKE A NEW COPY! if you work on this original wont change
+	ret.digits = digits; 
 	--for i=1,m do data[i] = digits[m-i+1] end -- copy
+	return ret
+end
+
+bignum.tablecopy = function(data) -- make copy cause tables are passed by reference
+	local ret = {};
+	for i = 1,#data do ret[i]=data[i] end
 	return ret
 end
 
@@ -564,6 +570,50 @@ bignum.exporthex = function(nhex) -- returns string with hex
 	return table.concat(ret,"")
 end
 
+local base64c = {"A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z",
+"a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z",
+"1","2","3","4","5","6","7","8","9","0","+","/"}
+local base64n = {}; for i=1,#base64c do	base64n[base64c[i]]=i-1 end
+
+bignum.exportbase64 = function(n)
+	local binary = bignum.base2binary(n);
+	local base64 = bignum.binary2base(binary,64);
+	local data = base64.digits;	local ret = {};
+	for i = #data,1,-1 do ret[#data-i+1] = base64c[data[i]+1] end
+	return table.concat(ret,"")
+end
+
+bignum.importbase64 = function(base64,newbase)
+	local digits = {}; local length = string.len(base64);
+	for i = length,1,-1 do digits[length-i+1] = base64n[string.sub(base64,i,i)]	end
+	local base64 = bignum.new(64,1,digits);
+	local binary = bignum.base2binary(base64);
+	return bignum.binary2base(binary,newbase);
+end
+
+bignum.importascii = function(text,newbase)
+	local m = 32; -- ascii 32-127
+	local digits = {}; local j = 1;
+	for i=1, string.len(text) do 
+		local c = string.byte(text,i)-m;
+		if c>=0 and c<96 then digits[j] = c; j =j +1 end
+	end
+	local ascii = bignum.new(96,1,digits);
+	local binary = bignum.base2binary(ascii);
+	return bignum.binary2base(binary,newbase);
+end
+
+
+bignum.exportascii = function(n) -- 32 - 127 (96) -- problem with non even base
+	local binary = bignum.base2binary(n);
+	local ascii = bignum.binary2base(binary,96);
+	local out = ascii.digits;
+	local m = 32;local ret = {}; 
+	for i = 1, #out do
+		ret[#ret+1] = string.char(m+out[i])
+	end
+	return table.concat(ret,"")
+end
 
 -----------------------------------------------
 --	ADDITION
