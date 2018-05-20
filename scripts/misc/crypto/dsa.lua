@@ -1,25 +1,26 @@
 --dsa by rnd
 --digital signature algorithm 
 
+--MAIN IDEA: present equation thats hard to solve in general but trivial to solve
+--if you know the private key.
+
 -- parameters: p,q,g
 -- 1. p,q primes such that p-1 = a'*q, for example p safe prime, p-1=2q (N bits, L bits)
--- 2. select g in Z_p of order q ( for example 2^(p-1)/q or 3^... if first one is 1)
+-- 2. select g in Z_p of order q ( for example h^(p-1)/q  will work almost always with h=2)
 
 -- user keys: x in Z_q private key, y = g^x in Z_p = private key
 
--- MAIN IDEA: given message m and random k in Z_q and r = g^k %p %q find
--- w such that: g^(hash(m)*w + x*r*w) %p %q = g^k %p %q
--- this is easy if we know x -> solve w*(h+x*r) =k in Z_q -> w = (h+x*r)^-1*k in Z_q
+-- MAIN IDEA: given h = hash(message m) in Z_q and random k in Z_q and r = g^k %p %q find
+-- w in Z_q such that: g^(hash(m)*w + x*r*w) %p %q = g^k %p %q
+-- this is easy if we know x -> solve w*(h+x*r) = k in Z_q -> w = (h+x*r)^-1*k in Z_q
 
--- now we hide k and x and show only  y = g^x and r = g^k, problem is rewritten as:
+-- now we hide k and x and show only  y = g^x%p and r = g^k %p %q, problem is rewritten as:
 -- PROBLEM:
 -- g^(h*w) * y^(r*w) %p %q  = r. So problem is determining such r and w.
 
--- NOTE: the idea of %p %q is to make brute force  even slower, since:
--- x=y %p %q if x=y+t1*q+t2*p for some p,q
-
--- note : 
---1 .the attacker doesnt have much freedom with h since he cant precisely control hash values
+-- NOTES: the idea of %p %q is to make brute force  even slower, since:
+--0. x=y %p %q if x=y+t1*q+t2*p for some p,q
+--1. attacker doesnt have much freedom with h since he cant precisely control hash values
 --2. suppose same k is reused for 2 different m. Write s = w^-1 mod q. Since
 --s = k^-1*(h+r*x) mod q we get: s2 = k^-1*(h2+r*x) and s1 = k^-1*(h1+r*x),
 -- or s2-s1 = k^-1( h2-h1) -> k = (s2-s1)^-1*(h2-h1).. and r^-1*(k*s-h)=x = BAD
@@ -77,55 +78,73 @@ end
 
 DSA = {};
 --msg = 520 bit number base 2^26
+-- MAIN IDEA: given h = hash(message m) in Z_q and random k in Z_q and r = g^k %p %q find
+-- w in Z_q such that: g^(hash(m)*w + x*r*w) %p %q = g^k %p %q
+-- this is easy if we know x -> solve w*(h+x*r) = k in Z_q -> w = (h+x*r)^-1*k in Z_q
+
 DSA.sign = function(msg,x) -- msg = (hash) message as number, x = private key 
 	local m = 20; local base = 2^26;
-	local k = bignum.rnd(base,1,m); -- random value!
+	local temp = bignum.rnd(base,1,m); -- random value, k should be <q!
+	local k = bignum.new(base,1,{}); bignum.mod(temp, barrettq, k);
 	
-	--warning: possible problem if q1.digits[1]-2 = 1-2<0 cause we didnt do carry! extremely unlikely, since digits in base 2^26.
-	local q1 = bignum.new(base,1,q.digits); q1.digits[1] = q1.digits[1]-2; -- q-2, needed to compute c^-1 = c^(q-2) mod q.
-	local g = bignum.new(base,1,{2^2}); -- g^q = 1 mod q ( g = 2^(p-1)/q mod p = 2^2)
-	local temp = bignum.modpow(g,k, barrettp); -- g^k mod p
-	local r = bignum.new(base,1,{});bignum.mod(temp,barrettq,r); --r = g^k mod p mod q
-	bignum.mul(x,r,temp); bignum._add(msg,temp,temp); -- temp = m+x*r
-	local temp1 = bignum.new(base,1,{});bignum.mod(temp,barrettq,temp1) -- range is very important, temp1 < q or modpow can freeze
-	temp = bignum.modpow(temp1, q1, barrettq); --(m+x*r)^-1 -- FREEZE PROBLEM if temp1>q. cause then temp1^2>q^2 and barret modpow fail..
+	--warning: possible problem if q1.digits[1]-2 = 1-2<0 cause we didnt do carry! in our case its 51665929. otherwise extremely unlikely, since digits in base 2^26.
+	local q2 = bignum.new(base,1,bignum.tablecopy(q.digits)); q2.digits[1] = q2.digits[1]-2; -- q-2, needed to compute c^-1 = c^(q-2) mod q.
+	
+	local g = bignum.new(base,1,{2^2}); -- g^q = 1 mod p ( g = 2^(p-1)/q mod p = 2^2)
+	temp = bignum.modpow(g,k, barrettp); 
+	local r = bignum.new(base,1,{}); bignum.mod(temp,barrettq,r); --r = g^k mod p mod q
+	
+	local mxr = bignum.new(base,1,{}) -- will be m+x*r mod q
+	local temp1 = bignum.new(base,1,{})
+	
+	bignum.mul(x,r,temp); bignum._add(msg,temp,temp1); -- temp1 = m+x*r
+	bignum.mod(temp1,barrettq,mxr) -- range is very important, temp1 < q or modpow can freeze
+	temp = bignum.modpow(mxr, q2, barrettq); --(m+x*r)^-1 -- FREEZE PROBLEM if temp1>q. cause then temp1^2>q^2 and barret modpow fail..
 
 	local w = bignum.new(base,1,{});
-	bignum.mul(temp,k,w);bignum.mod(w,barrettq,temp1) 
-	return {r,temp1} -- w = temp1 = (m+x*r)^-1*k in Z_q
+	bignum.mul(temp,k,temp1);bignum.mod(temp1,barrettq,w) -- w = (m+x*r)^-1*k
+	return {r,w} -- w = temp1 = (m+x*r)^-1*k in Z_q
 end
 
+dsa_sign_test = function()
+	
+	local x = bignum.rnd(2^26,1,20) -- private key
+	local g = bignum.new(2^26,1,{2^2});
+	local y = bignum.modpow(g,x,barrettp); -- public key
+	local msg = bignum.importascii("hello world",2^26) -- will cut off at 520 bytes, use hash here for real thing
+	local sig = DSA.sign(msg,x)
+	--say(minetest.serialize(sig))
+end
+--dsa_sign_test()
 
-
-DSA.verify = function(msg,sig,y) -- m = message, sig = {r,w} =  signature, y = public key (= g^x)
-	-- CHECK: g^(m*w) * y^(r*w) %p %q  == r
-	local m = 20; local base = 2^26;
-	local g = bignum.new(base,1,{2^2});
+DSA.verify = function(msg,sig,y,x,k) -- m = message, sig = {r,w} =  signature, y = public key (= g^x)
+	-- CHECK: g^(m*w) * y^(r*w) %p %q == r
 	local temp1 = bignum.new(base,1,{});
+	local m = 20; local base = 2^26;
+	local g = bignum.new(base,1,{2^2});	
+	
 	bignum.mul(msg,sig[2],temp1); temp1 = bignum.modpow(g,temp1,barrettp); -- temp1 = g^(m*w) mod p
 	local temp2 = bignum.new(base,1,{});
 	bignum.mul(sig[1],sig[2],temp2); temp2 = bignum.modpow(y,temp2,barrettp); -- temp2 = y^(r*w) mod p
 	local temp = bignum.new(base,1,{});
-	bignum.mul(temp1,temp2,temp); bignum.mod(temp,barrettq,temp1); -- temp1 = g^(m*w) * y^(r*w) %p %q
-	return bignum.is_equal(temp1,sig[1])
+	bignum.mul(temp1,temp2,temp); bignum.mod(temp,barrettp,temp1); -- temp1 = g^(m*w) * y^(r*w) %p
+	bignum.mod(temp1,barrettq,temp); -- temp = g^(m*w) * y^(r*w) %p %q
+	return bignum.is_equal(temp,sig[1])
 end
 
 
-dsa_sign_test = function()
+dsa_test = function()
 	local x = bignum.rnd(2^26,1,20) -- private key
 	local g = bignum.new(2^26,1,{2^2});
 	local y = bignum.modpow(g,x,barrettp) -- public key
 	
 	local msg = bignum.importascii("hello world",2^26) -- will cut off at 520 bytes, use hash here for real thing
-	
 	local sig = DSA.sign(msg,x)
-	--say(minetest.serialize(sig))
-
 	local ok = DSA.verify(msg,sig,y)
-	say(ok and "true" or "false")
+	
+	say(ok and "signature ok." or "signature failed.")
 end
-dsa_sign_test()
-
+dsa_test()
 
 
 

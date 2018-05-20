@@ -5,7 +5,7 @@
 if not init then
 	msgerver = "05172018b"
 	
-		-- WRITE IN WHO you want to talk to - id = real identity & name = current playername
+	targetid = {id = "qtest", name = "qtest"} -- WRITE IN WHO you want to talk to - id = real identity & name = current playername
 	myid = {id = "rnd", name = minetest.localplayer:get_name()}  -- your identity
 	
 	-- targetid = {id = "rnd", name = "rnd"} -- real identity & playername
@@ -191,7 +191,12 @@ if keygen == 1 then -- generating & exchanging 'public' key for one of the clien
 					
 					if step<=2 then 
 						if not Gb then Gb = {} end --dec = " sxxxxx", s = step
-						Gb[tonumber(string.sub(dec,2,2))] = string.sub(dec,3)
+						local part = string.sub(dec,2,2);
+						if part~="1" and part~="2" then 
+							say("ERROR receiving Gb.") step = 0; mode = 0;
+						else
+							Gb[tonumber(part)] = string.sub(dec,3)
+						end
 					else
 						say("ERROR receiving Gb. step " .. step .. ". aborting."); step =0; mode = 0;
 					end
@@ -330,7 +335,11 @@ if keygen == 1 then -- generating & exchanging 'public' key for one of the clien
 				else
 					step = step + 1
 					if not Gc then Gc = {} end -- dec = " sxxxxx", s = step
-					Gc[tonumber(string.sub(dec,2,2))] = string.sub(dec,3)
+					local part = string.sub(dec,2,2);
+					if part~="1" and part~="2" then say("ERROR, RECEIVED CORRUPTED Gc. ABORTING."); step = 0;mode = 0;
+					else
+						Gc[tonumber(part)] = string.sub(dec,3)
+					end
 					if step == 2 then
 						local digits = {};
 						for i = 1,2 do
