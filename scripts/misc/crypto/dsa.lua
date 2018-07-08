@@ -177,11 +177,12 @@ local DSAtest = function ()
 
 	say("PUBLIC KEY = " .. publickey)
 	
-	local msg = "i, rnd, state that i wrote all this from scratch :)";
+	local msg = "05/20/2018 i, rnd, state that i wrote all this from scratch :)";
 	say("MESSAGE = " .. msg)
 	local sig = DSA.sign(msg,privatekey)
 	say("SIGNATURE = " .. sig)
-	local ok = DSA.verify(msg,sig,publickey);
+	local msg1 = "05/20/2018 i, rnd, state that i wrote all this from scratch :)"
+	local ok = DSA.verify(msg1,sig,publickey);
 	
 	if ok then say(minetest.colorize("lawngreen","VERIFY: ok")) else say(minetest.colorize("red","VERIFY: fail")) end
 end

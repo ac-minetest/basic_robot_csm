@@ -5,7 +5,7 @@
 if not init then
 	msgerver = "05172018b"
 	
-	targetid = {id = "qtest", name = "qtest"} -- WRITE IN WHO you want to talk to - id = real identity & name = current playername
+	targetid = {id = "quater", name = "quater"} -- WRITE IN WHO you want to talk to - id = real identity & name = current playername
 	myid = {id = "rnd", name = minetest.localplayer:get_name()}  -- your identity
 	
 	-- targetid = {id = "rnd", name = "rnd"} -- real identity & playername
