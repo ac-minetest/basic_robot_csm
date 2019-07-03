@@ -429,7 +429,7 @@ end
 	end
 
 --minetest.register_on_receiving_chat_message( -- 0.4.16dev
-core.register_on_receiving_chat_messages( -- 0.4.16 original!
+core.register_on_receiving_chat_message( -- 0.5
 function(message)
 	local data = basic_robot.data;
 	if data.msg_filter and not string.find(message,data.msg_filter) then return false end -- only listens if chat contains filter pattern!
@@ -440,7 +440,7 @@ end
 
 
 -- minetest.register_on_sending_chat_message( --0.4.16dev
-core.register_on_sending_chat_messages( -- 0.4.16 original!
+core.register_on_sending_chat_message( -- 0.5
 	function(message)
 		if string.sub(message,1,1) == "," then 
 			basic_robot.data.sent_msg = string.sub(message,2)
